@@ -1,0 +1,31 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "trendcut"
+version = "0.1.0"
+description = "Self-hosted TDEE & cut tracker that estimates real maintenance calories from logged intake and weight, smooths the scale into a trend, and detects genuine plateaus."
+readme = "README.md"
+requires-python = ">=3.12"
+authors = [{ name = "James" }]
+
+[project.optional-dependencies]
+dev = [
+    "ruff",
+    "pytest",
+    "hypothesis",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["estimator"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
