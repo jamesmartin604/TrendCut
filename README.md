@@ -7,10 +7,13 @@ plateau has set in versus when you're just looking at water weight. The estimati
 logic is deterministic and mathematically defined, which makes it unusually easy to
 test — see [`PRD.md`](PRD.md) for the full design.
 
-> **Status:** Phase 1 — the synthetic ground-truth generator (`estimator/synthetic.py`)
-> is implemented and tested. The remaining `estimator` submodules (`smoothing`,
-> `tdee`, `plateau`) are intentionally empty stubs; their logic arrives in later phases.
-> See [`examples/simulate_demo.py`](examples/simulate_demo.py) for a runnable demo.
+> **Status:** Phase 2 — the synthetic ground-truth generator
+> (`estimator/synthetic.py`) and the gap-aware EWMA trend smoother
+> (`estimator/smoothing.py`) are implemented and tested. The remaining `estimator`
+> submodules (`tdee`, `plateau`) are intentionally empty stubs; their logic arrives
+> in later phases. See [`examples/`](examples/) for runnable demos —
+> [`simulate_demo.py`](examples/simulate_demo.py) generates a noisy diary and
+> [`smoothing_demo.py`](examples/smoothing_demo.py) charts the trend line through it.
 
 ## Layout
 
@@ -20,7 +23,7 @@ estimator/      # pure, framework-free estimation engine (the unit under test)
   tdee.py       # rolling regression + energy-balance TDEE estimate
   plateau.py    # graded plateau classifier
   synthetic.py  # synthetic ground-truth data generation for tests
-examples/       # runnable demos (e.g. simulate_demo.py)
+examples/       # runnable demos (simulate_demo.py, smoothing_demo.py)
 tests/          # pytest + hypothesis suite
 ```
 
