@@ -9,6 +9,9 @@ description = "Self-hosted TDEE & cut tracker that estimates real maintenance ca
 readme = "README.md"
 requires-python = ">=3.12"
 authors = [{ name = "James" }]
+dependencies = [
+    "numpy",
+]
 
 [project.optional-dependencies]
 dev = [

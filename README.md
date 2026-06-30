@@ -7,9 +7,10 @@ plateau has set in versus when you're just looking at water weight. The estimati
 logic is deterministic and mathematically defined, which makes it unusually easy to
 test — see [`PRD.md`](PRD.md) for the full design.
 
-> **Status:** Phase 0 — project skeleton and green CI only. The `estimator`
-> submodules are intentionally empty stubs; smoothing, TDEE, and plateau logic
-> arrive in later phases.
+> **Status:** Phase 1 — the synthetic ground-truth generator (`estimator/synthetic.py`)
+> is implemented and tested. The remaining `estimator` submodules (`smoothing`,
+> `tdee`, `plateau`) are intentionally empty stubs; their logic arrives in later phases.
+> See [`examples/simulate_demo.py`](examples/simulate_demo.py) for a runnable demo.
 
 ## Layout
 
@@ -19,6 +20,7 @@ estimator/      # pure, framework-free estimation engine (the unit under test)
   tdee.py       # rolling regression + energy-balance TDEE estimate
   plateau.py    # graded plateau classifier
   synthetic.py  # synthetic ground-truth data generation for tests
+examples/       # runnable demos (e.g. simulate_demo.py)
 tests/          # pytest + hypothesis suite
 ```
 
