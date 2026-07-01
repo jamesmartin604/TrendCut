@@ -18,9 +18,6 @@ with open("my_log.csv", newline="") as f:
 # Build a continuous daily calendar from first to last date, NaN-filling gaps.
 start, end = min(rows), max(rows)
 days = (end - start).days + 1
-# Build a continuous daily calendar from first to last date, NaN-filling gaps.
-start, end = min(rows), max(rows)
-days = (end - start).days + 1
 weight = np.full(days, np.nan)
 intake = np.full(days, np.nan)
 for d, (w, c) in rows.items():
