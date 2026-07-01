@@ -7,12 +7,14 @@ plateau has set in versus when you're just looking at water weight. The estimati
 logic is deterministic and mathematically defined, which makes it unusually easy to
 test — see [`PRD.md`](PRD.md) for the full design.
 
-> **Status:** Phase 3 — the synthetic ground-truth generator
+> **Status:** Phase 4 — the synthetic ground-truth generator
 > (`estimator/synthetic.py`), the gap-aware EWMA trend smoother
 > (`estimator/smoothing.py`), and the rolling-regression TDEE estimator
 > (`estimator/tdee.py`) are implemented and tested. The estimator recovers a known
 > TDEE from noisy synthetic data within ±100 kcal (matched energy density, moderate
-> noise). Only `plateau` remains a stub; its logic arrives in a later phase. See
+> noise), and a `hypothesis` property-based suite (`tests/test_properties.py`) fuzzes
+> its robustness invariants — boundedness, graceful insufficiency, stability, and
+> determinism. Only `plateau` remains a stub; its logic arrives in a later phase. See
 > [`examples/`](examples/) for runnable demos — [`simulate_demo.py`](examples/simulate_demo.py)
 > generates a noisy diary, [`smoothing_demo.py`](examples/smoothing_demo.py) charts the
 > trend line through it, and [`tdee_demo.py`](examples/tdee_demo.py) recovers the hidden TDEE.
@@ -47,7 +49,15 @@ pip install -e ".[dev]"
 ```bash
 ruff check .              # lint
 ruff format --check .     # formatting check
-pytest                    # tests
+pytest                    # tests (property tests use the fast "ci" hypothesis profile)
+```
+
+For heavier local fuzzing, run the property suite under the deep profile
+(2500 examples/test instead of 150) via the `HYPOTHESIS_PROFILE` env var — in
+PowerShell:
+
+```powershell
+$env:HYPOTHESIS_PROFILE="deep"; pytest tests/test_properties.py -q; Remove-Item Env:HYPOTHESIS_PROFILE
 ```
 
 These three are exactly what CI runs on every push and pull request (see
