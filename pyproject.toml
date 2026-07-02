@@ -9,8 +9,12 @@ description = "Self-hosted TDEE & cut tracker that estimates real maintenance ca
 readme = "README.md"
 requires-python = ">=3.12"
 authors = [{ name = "James" }]
+# NOTE: the estimator package itself imports only numpy. fastapi/uvicorn are used
+# solely by the api package (the web/storage layer); estimator/ stays framework-free.
 dependencies = [
     "numpy",
+    "fastapi",
+    "uvicorn",
 ]
 
 [project.optional-dependencies]
@@ -18,10 +22,11 @@ dev = [
     "ruff",
     "pytest",
     "hypothesis",
+    "httpx",  # required by fastapi/starlette TestClient
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["estimator"]
+packages = ["estimator", "api"]
 
 [tool.ruff]
 line-length = 100
@@ -29,6 +34,11 @@ target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
+
+[tool.ruff.lint.flake8-bugbear]
+# FastAPI's dependency-injection idiom puts ``Depends(...)`` in argument defaults
+# on purpose; it is not the mutable-default footgun B008 targets.
+extend-immutable-calls = ["fastapi.Depends"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
