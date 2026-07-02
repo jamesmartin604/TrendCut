@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>TrendCut | TDEE History</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind Configuration -->
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "primary-fixed": "#d8e2ff",
+                    "border-hairline": "#E5E5E5",
+                    "on-tertiary-container": "#fffbff",
+                    "status-error": "#EF4444",
+                    "primary-container": "#2170e4",
+                    "surface-bright": "#f9f9f9",
+                    "on-error-container": "#93000a",
+                    "error-container": "#ffdad6",
+                    "tertiary-fixed": "#ffdcc6",
+                    "surface-container-highest": "#e2e2e2",
+                    "on-secondary-fixed-variant": "#005236",
+                    "secondary": "#006c49",
+                    "surface-container-high": "#e8e8e8",
+                    "on-background": "#1a1c1c",
+                    "surface-container-low": "#f3f3f3",
+                    "on-primary-fixed": "#001a42",
+                    "outline-variant": "#c2c6d6",
+                    "on-surface-variant": "#424754",
+                    "background": "#f9f9f9",
+                    "on-tertiary": "#ffffff",
+                    "on-tertiary-fixed-variant": "#723600",
+                    "on-primary": "#ffffff",
+                    "on-secondary-container": "#00714d",
+                    "on-primary-container": "#fefcff",
+                    "on-error": "#ffffff",
+                    "on-surface": "#1a1c1c",
+                    "surface-variant": "#e2e2e2",
+                    "surface-dim": "#dadada",
+                    "status-warning": "#F59E0B",
+                    "surface-container-lowest": "#ffffff",
+                    "secondary-fixed": "#6ffbbe",
+                    "on-secondary-fixed": "#002113",
+                    "surface-tint": "#005ac2",
+                    "secondary-container": "#6cf8bb",
+                    "on-secondary": "#ffffff",
+                    "text-muted": "#737373",
+                    "inverse-on-surface": "#f0f1f1",
+                    "outline": "#727785",
+                    "tertiary-fixed-dim": "#ffb786",
+                    "inverse-primary": "#adc6ff",
+                    "surface": "#FFFFFF",
+                    "error": "#ba1a1a",
+                    "on-primary-fixed-variant": "#004395",
+                    "secondary-fixed-dim": "#4edea3",
+                    "surface-container": "#eeeeee",
+                    "primary-fixed-dim": "#adc6ff",
+                    "inverse-surface": "#2f3131",
+                    "tertiary": "#924700",
+                    "primary": "#0058be",
+                    "data-fill": "rgba(59, 130, 246, 0.08)",
+                    "on-tertiary-fixed": "#311400",
+                    "tertiary-container": "#b75b00"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "section-margin": "40px",
+                    "stack-gap": "16px",
+                    "gutter": "20px",
+                    "container-padding": "24px"
+            },
+            "fontFamily": {
+                    "data-display": ["JetBrains Mono"],
+                    "label-xs-mono": ["JetBrains Mono"],
+                    "label-sm": ["Inter"],
+                    "headline-lg": ["Inter"],
+                    "headline-lg-mobile": ["Inter"],
+                    "body-md": ["Inter"],
+                    "headline-md": ["Inter"]
+            },
+            "fontSize": {
+                    "data-display": ["28px", {"lineHeight": "36px", "fontWeight": "500"}],
+                    "label-xs-mono": ["11px", {"lineHeight": "14px", "fontWeight": "400"}],
+                    "label-sm": ["12px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "500"}],
+                    "headline-lg": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                    "headline-lg-mobile": ["28px", {"lineHeight": "34px", "fontWeight": "700"}],
+                    "body-md": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                    "headline-md": ["24px", {"lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "600"}]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            vertical-align: middle;
+        }
+        .chart-container {
+            position: relative;
+            width: 100%;
+            height: 320px;
+        }
+        .trend-line {
+            stroke-dasharray: 1000;
+            stroke-dashoffset: 1000;
+            animation: dash 2.5s ease-out forwards;
+        }
+        @keyframes dash {
+            to { stroke-dashoffset: 0; }
+        }
+        .dot-pulse {
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0% { r: 3; opacity: 0.4; }
+            50% { r: 5; opacity: 0.2; }
+            100% { r: 3; opacity: 0.4; }
+        }
+    </style>
+</head>
+<body class="bg-background text-on-background min-h-screen font-body-md selection:bg-primary-fixed">
+<!-- TopAppBar -->
+<header class="fixed top-0 w-full z-50 bg-surface/80 backdrop-blur-md border-b border-border-hairline">
+<div class="flex justify-between items-center px-container-padding h-16 max-w-[1200px] mx-auto">
+<div class="flex items-center gap-4">
+<span class="font-headline-md text-headline-md font-bold text-on-surface">TrendCut</span>
+</div>
+<nav class="hidden md:flex items-center gap-8">
+<a class="text-on-surface-variant hover:opacity-80 transition-opacity font-label-sm" href="#">Dashboard</a>
+<a class="text-primary font-semibold border-b-2 border-primary py-1 font-label-sm" href="#">TDEE History</a>
+<a class="text-on-surface-variant hover:opacity-80 transition-opacity font-label-sm" href="#">Nutrients</a>
+</nav>
+<div class="flex items-center gap-4">
+<button class="bg-primary text-on-primary px-4 py-2 rounded-lg font-label-sm active:scale-95 transition-transform duration-150">Log</button>
+</div>
+</div>
+</header>
+<main class="pt-24 pb-16 px-container-padding max-w-[1200px] mx-auto">
+<!-- Header Section -->
+<section class="mb-section-margin">
+<div class="flex flex-col md:flex-row md:items-end justify-between gap-stack-gap">
+<div>
+<h1 class="font-headline-lg text-headline-lg text-on-surface">TDEE History</h1>
+<p class="text-text-muted mt-2 max-w-2xl">
+                        Total Daily Energy Expenditure visualization over the last 8 weeks. This trend reflects adaptive thermogenesis—the metabolic adjustment your body makes as you maintain a caloric deficit.
+                    </p>
+</div>
+<div class="flex items-center gap-2 bg-surface p-2 rounded-xl border border-border-hairline shadow-sm">
+<div class="px-3 py-1 bg-primary-container/10 rounded-lg">
+<span class="text-primary font-label-sm font-semibold">8 WEEK DRIFT: -142 kcal</span>
+</div>
+</div>
+</div>
+</section>
+<!-- Main Chart Card -->
+<div class="grid grid-cols-1 lg:grid-cols-4 gap-gutter mb-section-margin">
+<div class="lg:col-span-3 bg-surface border border-border-hairline rounded-[20px] p-container-padding shadow-[0px_4px_20px_rgba(0,0,0,0.04)]">
+<div class="flex justify-between items-start mb-8">
+<div>
+<span class="font-label-sm text-text-muted uppercase tracking-wider">Metabolic Trend</span>
+<h2 class="font-headline-md text-headline-md text-on-surface">Expenditure Analysis</h2>
+</div>
+<div class="flex gap-4 text-right">
+<div>
+<span class="block font-label-xs-mono text-text-muted">CURRENT</span>
+<span class="font-data-display text-data-display text-primary">2,410 <span class="font-label-xs-mono">kcal</span></span>
+</div>
+</div>
+</div>
+<!-- Custom SVG Chart -->
+<div class="chart-container">
+<svg class="w-full h-full overflow-visible" viewbox="0 0 800 320">
+<!-- Horizontal Grid Lines -->
+<line stroke="#E5E5E5" stroke-width="1" x1="0" x2="800" y1="40" y2="40"></line>
+<line stroke="#E5E5E5" stroke-width="1" x1="0" x2="800" y1="110" y2="110"></line>
+<line stroke="#E5E5E5" stroke-width="1" x1="0" x2="800" y1="180" y2="180"></line>
+<line stroke="#E5E5E5" stroke-width="1" x1="0" x2="800" y1="250" y2="250"></line>
+<!-- Axis Labels (Y) -->
+<text fill="#737373" font-family="JetBrains Mono" font-size="10" text-anchor="end" x="-10" y="45">2600</text>
+<text fill="#737373" font-family="JetBrains Mono" font-size="10" text-anchor="end" x="-10" y="115">2500</text>
+<text fill="#737373" font-family="JetBrains Mono" font-size="10" text-anchor="end" x="-10" y="185">2400</text>
+<text fill="#737373" font-family="JetBrains Mono" font-size="10" text-anchor="end" x="-10" y="255">2300</text>
+<!-- The Trend Line (Refining adaptive thermogenesis - drift down) -->
+<path class="trend-line" d="M 0 80 Q 100 85, 200 110 T 400 145 T 600 165 T 800 180" fill="none" stroke="#0058be" stroke-width="3"></path>
+<!-- Shadow area below trend line -->
+<path d="M 0 80 Q 100 85, 200 110 T 400 145 T 600 165 T 800 180 L 800 320 L 0 320 Z" fill="url(#gradient-fill)" opacity="0.3"></path>
+<!-- Data points -->
+<circle cx="0" cy="80" fill="#0058be" opacity="0.4" r="4"></circle>
+<circle cx="200" cy="110" fill="#0058be" opacity="0.4" r="4"></circle>
+<circle cx="400" cy="145" fill="#0058be" opacity="0.4" r="4"></circle>
+<circle cx="600" cy="165" fill="#0058be" opacity="0.4" r="4"></circle>
+<circle class="dot-pulse" cx="800" cy="180" fill="#0058be" r="4"></circle>
+<!-- Gradients -->
+<defs>
+<lineargradient id="gradient-fill" x1="0" x2="0" y1="0" y2="1">
+<stop offset="0%" stop-color="#3B82F6" stop-opacity="0.2"></stop>
+<stop offset="100%" stop-color="#3B82F6" stop-opacity="0"></stop>
+</lineargradient>
+</defs>
+</svg>
+<!-- X-Axis Labels -->
+<div class="flex justify-between mt-6 px-2">
+<span class="font-label-xs-mono text-text-muted uppercase">Week 1</span>
+<span class="font-label-xs-mono text-text-muted uppercase">Week 3</span>
+<span class="font-label-xs-mono text-text-muted uppercase">Week 5</span>
+<span class="font-label-xs-mono text-text-muted uppercase">Week 7</span>
+<span class="font-label-xs-mono text-text-muted uppercase">Today</span>
+</div>
+</div>
+</div>
+<!-- Side Metrics -->
+<div class="flex flex-col gap-gutter">
+<div class="bg-surface border border-border-hairline rounded-[20px] p-6 shadow-sm">
+<span class="font-label-sm text-text-muted block mb-1">Baseline</span>
+<span class="font-headline-md text-headline-md text-on-surface">2,552 <span class="font-label-xs-mono text-base">kcal</span></span>
+<p class="text-label-sm text-text-muted mt-2">Starting maintenance at week 0.</p>
+</div>
+<div class="bg-surface border border-border-hairline rounded-[20px] p-6 shadow-sm">
+<span class="font-label-sm text-text-muted block mb-1">Efficiency</span>
+<span class="font-headline-md text-headline-md text-secondary">94%</span>
+<p class="text-label-sm text-text-muted mt-2">Metabolic rate vs predicted baseline.</p>
+</div>
+<div class="bg-primary-container text-on-primary-container rounded-[20px] p-6 shadow-sm">
+<div class="flex items-center gap-2 mb-2">
+<span class="material-symbols-outlined text-white">insights</span>
+<span class="font-label-sm text-white/80 uppercase">Prediction</span>
+</div>
+<p class="font-body-md text-white font-medium">TDEE expected to stabilize at 2,380 kcal in 14 days.</p>
+</div>
+</div>
+</div>
+<!-- Bento Analysis Grid -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-gutter">
+<!-- Weekly Breakdown -->
+<div class="bg-surface border border-border-hairline rounded-[20px] p-container-padding flex flex-col justify-between">
+<div>
+<h3 class="font-label-sm text-text-muted uppercase mb-4">Weekly Velocity</h3>
+<div class="space-y-4">
+<div class="flex justify-between items-center pb-2 border-b border-border-hairline">
+<span class="text-body-md">Week 8 (Current)</span>
+<span class="font-label-xs-mono text-status-error font-medium">-12 kcal</span>
+</div>
+<div class="flex justify-between items-center pb-2 border-b border-border-hairline">
+<span class="text-body-md">Week 7</span>
+<span class="font-label-xs-mono text-status-error font-medium">-18 kcal</span>
+</div>
+<div class="flex justify-between items-center pb-2 border-b border-border-hairline">
+<span class="text-body-md">Week 6</span>
+<span class="font-label-xs-mono text-status-error font-medium">-22 kcal</span>
+</div>
+</div>
+</div>
+<button class="mt-6 text-primary font-label-sm hover:underline text-left">View full log →</button>
+</div>
+<!-- Visualization Element -->
+<div class="bg-surface border border-border-hairline rounded-[20px] relative overflow-hidden h-[240px]">
+<div class="absolute inset-0 z-0">
+<div class="w-full h-full opacity-10" style="background-image: radial-gradient(#0058be 1px, transparent 1px); background-size: 20px 20px;"></div>
+</div>
+<div class="relative z-10 p-container-padding h-full flex flex-col justify-center">
+<span class="material-symbols-outlined text-primary text-4xl mb-4">trending_down</span>
+<h3 class="font-headline-md text-headline-md text-on-surface">Downward Drift</h3>
+<p class="text-label-sm text-text-muted mt-2">Your TDEE is adapting to lower intake. This is normal metabolic adaptation.</p>
+</div>
+</div>
+<!-- Comparison Card -->
+<div class="bg-surface border border-border-hairline rounded-[20px] p-container-padding">
+<h3 class="font-label-sm text-text-muted uppercase mb-6">Phase Comparison</h3>
+<div class="flex items-end gap-4 h-32">
+<div class="flex-1 flex flex-col items-center">
+<div class="w-full bg-primary-container/20 h-full rounded-t-lg relative">
+<div class="absolute bottom-0 w-full bg-primary-container rounded-t-lg" style="height: 100%;"></div>
+</div>
+<span class="font-label-xs-mono mt-2">Start</span>
+</div>
+<div class="flex-1 flex flex-col items-center">
+<div class="w-full bg-primary-container/20 h-full rounded-t-lg relative">
+<div class="absolute bottom-0 w-full bg-primary-container rounded-t-lg" style="height: 85%;"></div>
+</div>
+<span class="font-label-xs-mono mt-2">Month 1</span>
+</div>
+<div class="flex-1 flex flex-col items-center">
+<div class="w-full bg-primary-container/20 h-full rounded-t-lg relative">
+<div class="absolute bottom-0 w-full bg-primary-container rounded-t-lg" style="height: 72%;"></div>
+</div>
+<span class="font-label-xs-mono mt-2">Month 2</span>
+</div>
+</div>
+<div class="mt-4 pt-4 border-t border-border-hairline">
+<span class="text-label-sm text-text-muted">Average daily expenditure decreased by 22.4% over 60 days.</span>
+</div>
+</div>
+</div>
+</main>
+<!-- Footer -->
+<footer class="w-full py-10 bg-background border-t border-border-hairline">
+<div class="flex flex-col md:flex-row justify-between items-center gap-stack-gap px-container-padding max-w-[1200px] mx-auto">
+<div class="flex items-center gap-4">
+<span class="font-label-sm font-medium text-secondary">© 2024 TrendCut</span>
+</div>
+<div class="flex gap-8">
+<a class="font-label-sm text-text-muted hover:text-primary transition-colors" href="#">Export Data</a>
+<a class="font-label-sm text-text-muted hover:text-primary transition-colors" href="#">Privacy</a>
+</div>
+</div>
+</footer>
+<script>
+        // Micro-interaction for data points
+        document.querySelectorAll('circle').forEach(circle => {
+            circle.addEventListener('mouseenter', function() {
+                this.setAttribute('r', '8');
+                this.style.transition = 'r 0.2s ease';
+            });
+            circle.addEventListener('mouseleave', function() {
+                this.setAttribute('r', '4');
+            });
+        });
+    </script>
+</body></html>

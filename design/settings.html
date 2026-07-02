@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>TrendCut Settings</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "primary-fixed": "#d8e2ff",
+                    "border-hairline": "#E5E5E5",
+                    "on-tertiary-container": "#fffbff",
+                    "status-error": "#EF4444",
+                    "primary-container": "#2170e4",
+                    "surface-bright": "#f9f9f9",
+                    "on-error-container": "#93000a",
+                    "error-container": "#ffdad6",
+                    "tertiary-fixed": "#ffdcc6",
+                    "surface-container-highest": "#e2e2e2",
+                    "on-secondary-fixed-variant": "#005236",
+                    "secondary": "#006c49",
+                    "surface-container-high": "#e8e8e8",
+                    "on-background": "#1a1c1c",
+                    "surface-container-low": "#f3f3f3",
+                    "on-primary-fixed": "#001a42",
+                    "outline-variant": "#c2c6d6",
+                    "on-surface-variant": "#424754",
+                    "background": "#f9f9f9",
+                    "on-tertiary": "#ffffff",
+                    "on-tertiary-fixed-variant": "#723600",
+                    "on-primary": "#ffffff",
+                    "on-secondary-container": "#00714d",
+                    "on-primary-container": "#fefcff",
+                    "on-error": "#ffffff",
+                    "on-surface": "#1a1c1c",
+                    "surface-variant": "#e2e2e2",
+                    "surface-dim": "#dadada",
+                    "status-warning": "#F59E0B",
+                    "surface-container-lowest": "#ffffff",
+                    "secondary-fixed": "#6ffbbe",
+                    "on-secondary-fixed": "#002113",
+                    "surface-tint": "#005ac2",
+                    "secondary-container": "#6cf8bb",
+                    "on-secondary": "#ffffff",
+                    "text-muted": "#737373",
+                    "inverse-on-surface": "#f0f1f1",
+                    "outline": "#727785",
+                    "tertiary-fixed-dim": "#ffb786",
+                    "inverse-primary": "#adc6ff",
+                    "surface": "#FFFFFF",
+                    "error": "#ba1a1a",
+                    "on-primary-fixed-variant": "#004395",
+                    "secondary-fixed-dim": "#4edea3",
+                    "surface-container": "#eeeeee",
+                    "primary-fixed-dim": "#adc6ff",
+                    "inverse-surface": "#2f3131",
+                    "tertiary": "#924700",
+                    "primary": "#0058be",
+                    "data-fill": "rgba(59, 130, 246, 0.08)",
+                    "on-tertiary-fixed": "#311400",
+                    "tertiary-container": "#b75b00"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "section-margin": "40px",
+                    "stack-gap": "16px",
+                    "gutter": "20px",
+                    "container-padding": "24px"
+            },
+            "fontFamily": {
+                    "data-display": ["JetBrains Mono"],
+                    "label-xs-mono": ["JetBrains Mono"],
+                    "label-sm": ["Inter"],
+                    "headline-lg": ["Inter"],
+                    "headline-lg-mobile": ["Inter"],
+                    "body-md": ["Inter"],
+                    "headline-md": ["Inter"]
+            },
+            "fontSize": {
+                    "data-display": ["28px", {"lineHeight": "36px", "fontWeight": "500"}],
+                    "label-xs-mono": ["11px", {"lineHeight": "14px", "fontWeight": "400"}],
+                    "label-sm": ["12px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "500"}],
+                    "headline-lg": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                    "headline-lg-mobile": ["28px", {"lineHeight": "34px", "fontWeight": "700"}],
+                    "body-md": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                    "headline-md": ["24px", {"lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "600"}]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        body {
+            background-color: #f9f9f9;
+            color: #1a1c1c;
+            -webkit-font-smoothing: antialiased;
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            vertical-align: middle;
+        }
+        .ios-row:last-child {
+            border-bottom: none;
+        }
+        .custom-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 24px;
+            height: 24px;
+            background: #ffffff;
+            border: 1px solid #E5E5E5;
+            box-shadow: 0px 2px 4px rgba(0,0,0,0.1);
+            border-radius: 50%;
+            cursor: pointer;
+        }
+        .custom-slider::-moz-range-thumb {
+            width: 24px;
+            height: 24px;
+            background: #ffffff;
+            border: 1px solid #E5E5E5;
+            box-shadow: 0px 2px 4px rgba(0,0,0,0.1);
+            border-radius: 50%;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body class="min-h-screen">
+<!-- Top Navigation Anchor -->
+<header class="fixed top-0 w-full z-50 bg-surface/80 backdrop-blur-md border-b border-border-hairline">
+<div class="flex justify-between items-center px-container-padding h-16 max-w-[1200px] mx-auto">
+<h1 class="font-headline-md text-headline-md font-bold text-on-surface">TrendCut</h1>
+<nav class="hidden md:flex gap-8">
+<a class="text-on-surface-variant font-medium hover:opacity-80 transition-opacity" href="#">Dashboard</a>
+<a class="text-on-surface-variant font-medium hover:opacity-80 transition-opacity" href="#">History</a>
+<a class="text-primary font-semibold border-b-2 border-primary transition-opacity" href="#">Settings</a>
+</nav>
+<div class="flex items-center gap-4">
+<button class="active:scale-95 transition-transform duration-150">
+<span class="material-symbols-outlined text-on-surface-variant">search</span>
+</button>
+<div class="w-8 h-8 rounded-full bg-primary-fixed flex items-center justify-center">
+<span class="text-on-primary-fixed font-semibold text-[12px]">JS</span>
+</div>
+</div>
+</div>
+</header>
+<main class="pt-32 pb-24 px-container-padding max-w-[1200px] mx-auto">
+<div class="mb-section-margin">
+<h2 class="font-headline-lg text-headline-lg text-on-surface mb-2">Settings</h2>
+<p class="font-body-md text-body-md text-text-muted">Configure your physiological parameters and trend algorithms.</p>
+</div>
+<div class="space-y-section-margin">
+<!-- Group 1: Weight Goals -->
+<section>
+<h3 class="font-label-sm text-label-sm text-text-muted uppercase tracking-widest mb-4 px-1">Goal Configuration</h3>
+<div class="bg-surface border border-border-hairline rounded-[20px] overflow-hidden">
+<!-- Unit Toggle -->
+<div class="ios-row flex items-center justify-between p-container-padding border-b border-border-hairline bg-surface">
+<div class="flex items-center gap-4">
+<span class="material-symbols-outlined text-primary">straighten</span>
+<span class="font-body-md text-body-md text-on-surface">Display Units</span>
+</div>
+<div class="flex bg-surface-container-low p-1 rounded-lg">
+<button class="px-4 py-1.5 rounded-md bg-surface shadow-sm font-label-sm text-label-sm text-primary transition-all">kg</button>
+<button class="px-4 py-1.5 rounded-md font-label-sm text-label-sm text-text-muted hover:text-on-surface transition-all">lb</button>
+</div>
+</div>
+<!-- Target Weight -->
+<div class="ios-row flex items-center justify-between p-container-padding border-b border-border-hairline bg-surface">
+<div class="flex items-center gap-4">
+<span class="material-symbols-outlined text-primary">target</span>
+<span class="font-body-md text-body-md text-on-surface">Target Weight</span>
+</div>
+<div class="flex items-baseline gap-1">
+<input class="w-16 bg-transparent border-b border-border-hairline text-right font-data-display text-[20px] focus:border-primary outline-none transition-colors" type="number" value="72.5"/>
+<span class="font-label-xs-mono text-label-xs-mono text-text-muted">kg</span>
+</div>
+</div>
+<!-- Target Date -->
+<div class="ios-row flex items-center justify-between p-container-padding border-b border-border-hairline bg-surface">
+<div class="flex items-center gap-4">
+<span class="material-symbols-outlined text-primary">calendar_today</span>
+<span class="font-body-md text-body-md text-on-surface">Target Date</span>
+</div>
+<input class="bg-transparent border-none text-right font-body-md text-body-md text-primary focus:ring-0 cursor-pointer" type="date" value="2024-12-24"/>
+</div>
+</div>
+</section>
+<!-- Group 2: Algorithmic Calibration -->
+<section>
+<div class="flex justify-between items-end mb-4 px-1">
+<h3 class="font-label-sm text-label-sm text-text-muted uppercase tracking-widest">Algorithm Calibration</h3>
+<span class="font-label-xs-mono text-label-xs-mono text-primary bg-primary-fixed px-2 py-0.5 rounded">Exponential Moving Average</span>
+</div>
+<div class="bg-surface border border-border-hairline rounded-[20px] overflow-hidden">
+<!-- Smoothing Strength -->
+<div class="ios-row p-container-padding border-b border-border-hairline bg-surface">
+<div class="flex justify-between items-center mb-6">
+<div class="flex items-center gap-4">
+<span class="material-symbols-outlined text-secondary">waves</span>
+<span class="font-body-md text-body-md text-on-surface">Smoothing Strength</span>
+</div>
+<span class="font-data-display text-[18px] text-secondary">65%</span>
+</div>
+<div class="px-2">
+<input class="custom-slider w-full h-1 bg-surface-container-high rounded-full appearance-none accent-secondary" max="100" min="0" type="range" value="65"/>
+<div class="flex justify-between mt-3">
+<span class="font-label-xs-mono text-label-xs-mono text-text-muted">Reactive</span>
+<span class="font-label-xs-mono text-label-xs-mono text-text-muted">Stable</span>
+</div>
+</div>
+</div>
+<!-- Regression Window -->
+<div class="ios-row p-container-padding border-b border-border-hairline bg-surface">
+<div class="flex items-center gap-4 mb-4">
+<span class="material-symbols-outlined text-secondary">monitoring</span>
+<span class="font-body-md text-body-md text-on-surface">Regression Window</span>
+</div>
+<div class="grid grid-cols-3 gap-3">
+<button class="py-3 rounded-xl border border-border-hairline font-label-sm text-label-sm text-text-muted hover:bg-surface-container-low transition-colors">14 Days</button>
+<button class="py-3 rounded-xl border-2 border-primary bg-primary-fixed/30 font-label-sm text-label-sm text-primary font-semibold">21 Days</button>
+<button class="py-3 rounded-xl border border-border-hairline font-label-sm text-label-sm text-text-muted hover:bg-surface-container-low transition-colors">28 Days</button>
+</div>
+<p class="mt-4 font-label-sm text-[11px] text-text-muted leading-relaxed">
+                            A longer window provides higher mathematical honesty by filtering out short-term water fluctuations, but may feel less motivating during rapid progress phases.
+                        </p>
+</div>
+</div>
+</section>
+<!-- Group 3: Data Integrity -->
+<section>
+<h3 class="font-label-sm text-label-sm text-text-muted uppercase tracking-widest mb-4 px-1">Data Management</h3>
+<div class="bg-surface border border-border-hairline rounded-[20px] overflow-hidden">
+<button class="ios-row w-full flex items-center justify-between p-container-padding border-b border-border-hairline bg-surface hover:bg-surface-container-lowest transition-colors group">
+<div class="flex items-center gap-4">
+<span class="material-symbols-outlined text-on-surface-variant">download</span>
+<span class="font-body-md text-body-md text-on-surface">Export CSV Data</span>
+</div>
+<span class="material-symbols-outlined text-outline group-hover:translate-x-1 transition-transform">chevron_right</span>
+</button>
+<button class="ios-row w-full flex items-center justify-between p-container-padding border-b border-border-hairline bg-surface hover:bg-error-container/10 transition-colors group">
+<div class="flex items-center gap-4">
+<span class="material-symbols-outlined text-error">delete_forever</span>
+<span class="font-body-md text-body-md text-error">Purge All Records</span>
+</div>
+<span class="material-symbols-outlined text-error/40 group-hover:translate-x-1 transition-transform">chevron_right</span>
+</button>
+</div>
+</section>
+</div>
+<!-- Visual Anchor / Ambient Element -->
+<div class="mt-section-margin relative rounded-[24px] overflow-hidden h-48 border border-border-hairline group">
+
+<div class="absolute inset-0 bg-gradient-to-t from-surface via-transparent to-transparent"></div>
+<div class="absolute bottom-6 left-6 right-6 flex justify-between items-end">
+<div>
+<span class="font-label-xs-mono text-label-xs-mono text-primary font-bold uppercase tracking-widest block mb-1">System Status</span>
+<h4 class="font-headline-md text-[20px] text-on-surface">Engine Calibrated</h4>
+</div>
+<div class="flex items-center gap-2">
+<div class="w-2 h-2 rounded-full bg-secondary animate-pulse"></div>
+<span class="font-label-sm text-label-sm text-secondary">Live Sync Active</span>
+</div>
+</div>
+</div>
+</main>
+<!-- Footer Anchor -->
+<footer class="w-full py-10 border-t border-border-hairline bg-background">
+<div class="flex flex-col md:flex-row justify-between items-center gap-stack-gap px-container-padding max-w-[1200px] mx-auto">
+<div class="flex items-center gap-6">
+<span class="font-label-sm text-label-sm font-medium text-secondary">© 2024 TrendCut</span>
+<div class="flex gap-4">
+<a class="font-label-sm text-label-sm text-text-muted hover:text-primary transition-colors" href="#">Privacy</a>
+<a class="font-label-sm text-label-sm text-text-muted hover:text-primary transition-colors" href="#">Export Data</a>
+</div>
+</div>
+<div class="text-text-muted font-label-xs-mono text-label-xs-mono">
+                v2.4.1 — Deterministic Calm
+            </div>
+</div>
+</footer>
+<!-- Bottom Navigation Mobile -->
+<div class="md:hidden fixed bottom-0 left-0 w-full bg-surface/90 backdrop-blur-xl border-t border-border-hairline px-6 py-4 flex justify-around items-center z-50">
+<button class="flex flex-col items-center gap-1 text-on-surface-variant">
+<span class="material-symbols-outlined">dashboard</span>
+<span class="text-[10px] font-medium">Trends</span>
+</button>
+<button class="flex flex-col items-center gap-1 text-on-surface-variant">
+<span class="material-symbols-outlined">history</span>
+<span class="text-[10px] font-medium">Log</span>
+</button>
+<button class="flex flex-col items-center gap-1 text-primary">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">settings</span>
+<span class="text-[10px] font-semibold">Settings</span>
+</button>
+</div>
+<script>
+        // Micro-interactions for setting toggles
+        document.querySelectorAll('.grid button, .flex button').forEach(button => {
+            button.addEventListener('click', function() {
+                if(this.parentElement.classList.contains('grid') || this.parentElement.classList.contains('flex')) {
+                    this.parentElement.querySelectorAll('button').forEach(b => {
+                        b.classList.remove('bg-primary-fixed/30', 'border-primary', 'text-primary', 'font-semibold', 'bg-surface', 'shadow-sm');
+                        b.classList.add('text-text-muted', 'border-border-hairline');
+                    });
+                    
+                    if(this.innerText === 'kg' || this.innerText === 'lb') {
+                         this.classList.add('bg-surface', 'shadow-sm', 'text-primary');
+                    } else {
+                        this.classList.add('bg-primary-fixed/30', 'border-primary', 'text-primary', 'font-semibold');
+                    }
+                    this.classList.remove('text-text-muted', 'border-border-hairline');
+                }
+            });
+        });
+
+        // Range slider value display
+        const slider = document.querySelector('input[type="range"]');
+        const display = document.querySelector('.text-secondary.font-data-display');
+        if(slider && display) {
+            slider.addEventListener('input', (e) => {
+                display.innerText = `${e.target.value}%`;
+            });
+        }
+    </script>
+</body></html>

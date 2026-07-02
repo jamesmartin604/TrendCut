@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>TrendCut Dashboard</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "primary-fixed": "#d8e2ff",
+                    "border-hairline": "#E5E5E5",
+                    "on-tertiary-container": "#fffbff",
+                    "status-error": "#EF4444",
+                    "primary-container": "#2170e4",
+                    "surface-bright": "#f9f9f9",
+                    "on-error-container": "#93000a",
+                    "error-container": "#ffdad6",
+                    "tertiary-fixed": "#ffdcc6",
+                    "surface-container-highest": "#e2e2e2",
+                    "on-secondary-fixed-variant": "#005236",
+                    "secondary": "#006c49",
+                    "surface-container-high": "#e8e8e8",
+                    "on-background": "#1a1c1c",
+                    "surface-container-low": "#f3f3f3",
+                    "on-primary-fixed": "#001a42",
+                    "outline-variant": "#c2c6d6",
+                    "on-surface-variant": "#424754",
+                    "background": "#f9f9f9",
+                    "on-tertiary": "#ffffff",
+                    "on-tertiary-fixed-variant": "#723600",
+                    "on-primary": "#ffffff",
+                    "on-secondary-container": "#00714d",
+                    "on-primary-container": "#fefcff",
+                    "on-error": "#ffffff",
+                    "on-surface": "#1a1c1c",
+                    "surface-variant": "#e2e2e2",
+                    "surface-dim": "#dadada",
+                    "status-warning": "#F59E0B",
+                    "surface-container-lowest": "#ffffff",
+                    "secondary-fixed": "#6ffbbe",
+                    "on-secondary-fixed": "#002113",
+                    "surface-tint": "#005ac2",
+                    "secondary-container": "#6cf8bb",
+                    "on-secondary": "#ffffff",
+                    "text-muted": "#737373",
+                    "inverse-on-surface": "#f0f1f1",
+                    "outline": "#727785",
+                    "tertiary-fixed-dim": "#ffb786",
+                    "inverse-primary": "#adc6ff",
+                    "surface": "#FFFFFF",
+                    "error": "#ba1a1a",
+                    "on-primary-fixed-variant": "#004395",
+                    "secondary-fixed-dim": "#4edea3",
+                    "surface-container": "#eeeeee",
+                    "primary-fixed-dim": "#adc6ff",
+                    "inverse-surface": "#2f3131",
+                    "tertiary": "#924700",
+                    "primary": "#0058be",
+                    "data-fill": "rgba(59, 130, 246, 0.08)",
+                    "on-tertiary-fixed": "#311400",
+                    "tertiary-container": "#b75b00"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "2xl": "20px",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "section-margin": "40px",
+                    "stack-gap": "16px",
+                    "gutter": "20px",
+                    "container-padding": "24px"
+            },
+            "fontFamily": {
+                    "data-display": ["JetBrains Mono"],
+                    "label-xs-mono": ["JetBrains Mono"],
+                    "label-sm": ["Inter"],
+                    "headline-lg": ["Inter"],
+                    "headline-lg-mobile": ["Inter"],
+                    "body-md": ["Inter"],
+                    "headline-md": ["Inter"]
+            },
+            "fontSize": {
+                    "data-display": ["28px", {"lineHeight": "36px", "fontWeight": "500"}],
+                    "label-xs-mono": ["11px", {"lineHeight": "14px", "fontWeight": "400"}],
+                    "label-sm": ["12px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "500"}],
+                    "headline-lg": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                    "headline-lg-mobile": ["28px", {"lineHeight": "34px", "fontWeight": "700"}],
+                    "body-md": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                    "headline-md": ["24px", {"lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "600"}]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        body {
+            background-color: #FAFAFA;
+            color: #1a1c1c;
+            -webkit-font-smoothing: antialiased;
+        }
+        .card-shadow {
+            box-shadow: 0px 4px 20px rgba(0,0,0,0.04);
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+    </style>
+</head>
+<body class="font-body-md text-body-md">
+<!-- TopAppBar -->
+<nav class="fixed top-0 w-full z-50 bg-surface/80 backdrop-blur-md border-b border-border-hairline">
+<div class="flex justify-between items-center px-container-padding h-16 max-w-[1200px] mx-auto">
+<div class="flex items-center gap-2">
+<span class="font-headline-md text-headline-md font-bold text-on-surface">TrendCut</span>
+</div>
+<div class="hidden md:flex items-center gap-8">
+<a class="text-primary font-semibold border-b-2 border-primary py-5" href="#">Dashboard</a>
+<a class="text-on-surface-variant hover:opacity-80 transition-opacity" href="#">Log</a>
+<a class="text-on-surface-variant hover:opacity-80 transition-opacity" href="#">Insights</a>
+<a class="text-on-surface-variant hover:opacity-80 transition-opacity" href="#">Profile</a>
+</div>
+<button class="md:hidden text-on-surface">
+<span class="material-symbols-outlined">menu</span>
+</button>
+</div>
+</nav>
+<main class="pt-24 pb-12 px-container-padding max-w-[1200px] mx-auto space-y-stack-gap">
+<!-- Hero Section: TDEE Analysis -->
+<section class="grid grid-cols-1 md:grid-cols-3 gap-stack-gap">
+<div class="md:col-span-2 bg-surface border border-border-hairline rounded-2xl p-container-padding card-shadow transition-transform active:scale-[0.99] duration-150">
+<header class="mb-4">
+<span class="font-label-sm text-label-sm text-text-muted uppercase tracking-wider">Estimated TDEE</span>
+</header>
+<div class="flex flex-baseline items-baseline gap-2">
+<h1 class="font-headline-lg text-headline-lg text-on-surface">2,480</h1>
+<span class="font-label-xs-mono text-label-xs-mono text-text-muted">kcal</span>
+</div>
+<p class="font-label-sm text-label-sm text-text-muted mt-1">2,310–2,650 95% CI</p>
+<!-- Micro-interaction: Hover glow effect simulated via container -->
+<div class="mt-8 pt-6 border-t border-border-hairline flex items-center justify-between">
+<div class="flex flex-col">
+<span class="font-label-sm text-label-sm text-text-muted">Status</span>
+<div class="flex items-center gap-2 mt-1">
+<div class="w-2 h-2 rounded-full bg-secondary"></div>
+<span class="font-body-md text-secondary font-medium">On Track</span>
+</div>
+</div>
+<div class="text-right">
+<p class="font-label-sm text-label-sm text-text-muted">Your weight trend is consistent with your 500 kcal deficit.</p>
+</div>
+</div>
+</div>
+<!-- Pace Card -->
+<div class="bg-surface border border-border-hairline rounded-2xl p-container-padding card-shadow">
+<header class="mb-6">
+<span class="font-label-sm text-label-sm text-text-muted uppercase tracking-wider">Current Pace</span>
+</header>
+<div class="space-y-6">
+<div>
+<div class="flex justify-between items-end mb-1">
+<span class="text-on-surface-variant font-medium">Daily Deficit</span>
+<span class="font-data-display text-data-display text-primary">500<span class="text-label-xs-mono"> kcal</span></span>
+</div>
+<div class="w-full bg-surface-container h-1 rounded-full overflow-hidden">
+<div class="bg-primary h-full w-2/3"></div>
+</div>
+</div>
+<div class="flex justify-between items-center py-2 border-b border-border-hairline">
+<span class="text-on-surface-variant">Projected Rate</span>
+<span class="font-label-xs-mono text-label-xs-mono font-medium">0.5 kg/week</span>
+</div>
+<div class="flex items-center gap-3 text-secondary bg-secondary-container/20 p-3 rounded-xl">
+<span class="material-symbols-outlined text-[20px]" style="font-variation-settings: 'FILL' 1;">event</span>
+<p class="font-label-sm text-label-sm leading-tight font-semibold">On pace for 80kg by Sept 12</p>
+</div>
+</div>
+</div>
+</section>
+<!-- Trend Weight Chart Card -->
+<section class="bg-surface border border-border-hairline rounded-2xl p-container-padding card-shadow">
+<div class="flex justify-between items-center mb-8">
+<div>
+<h2 class="font-headline-md text-headline-md text-on-surface">Weight Trend</h2>
+<p class="font-label-sm text-label-sm text-text-muted">Last 30 days analysis</p>
+</div>
+<div class="flex gap-2">
+<button class="px-3 py-1.5 rounded-lg bg-surface-container-low text-label-sm font-medium hover:bg-surface-container transition-colors">7D</button>
+<button class="px-3 py-1.5 rounded-lg bg-primary text-on-primary text-label-sm font-medium">30D</button>
+<button class="px-3 py-1.5 rounded-lg bg-surface-container-low text-label-sm font-medium hover:bg-surface-container transition-colors">90D</button>
+</div>
+</div>
+<!-- Minimalist Chart Visual -->
+<div class="relative h-[300px] w-full mt-4">
+<svg class="w-full h-full overflow-visible" viewbox="0 0 800 300">
+<!-- Grid Lines -->
+<line stroke="#E5E5E5" stroke-dasharray="4" stroke-width="1" x1="0" x2="800" y1="250" y2="250"></line>
+<line stroke="#F3F3F3" stroke-width="1" x1="0" x2="800" y1="150" y2="150"></line>
+<line stroke="#F3F3F3" stroke-width="1" x1="0" x2="800" y1="50" y2="50"></line>
+<!-- Vertical Time Lines (Weeks) -->
+<line stroke="#F3F3F3" stroke-width="1" x1="200" x2="200" y1="0" y2="300"></line>
+<line stroke="#F3F3F3" stroke-width="1" x1="400" x2="400" y1="0" y2="300"></line>
+<line stroke="#F3F3F3" stroke-width="1" x1="600" x2="600" y1="0" y2="300"></line>
+<!-- Raw Data Dots (Faint) -->
+<g opacity="0.4">
+<circle cx="20" cy="120" fill="#3B82F6" r="3"></circle>
+<circle cx="50" cy="130" fill="#3B82F6" r="3"></circle>
+<circle cx="100" cy="115" fill="#3B82F6" r="3"></circle>
+<circle cx="150" cy="135" fill="#3B82F6" r="3"></circle>
+<circle cx="200" cy="145" fill="#3B82F6" r="3"></circle>
+<circle cx="250" cy="140" fill="#3B82F6" r="3"></circle>
+<circle cx="300" cy="160" fill="#3B82F6" r="3"></circle>
+<circle cx="350" cy="165" fill="#3B82F6" r="3"></circle>
+<circle cx="400" cy="180" fill="#3B82F6" r="3"></circle>
+<circle cx="450" cy="175" fill="#3B82F6" r="3"></circle>
+<circle cx="500" cy="195" fill="#3B82F6" r="3"></circle>
+<circle cx="550" cy="190" fill="#3B82F6" r="3"></circle>
+<circle cx="600" cy="210" fill="#3B82F6" r="3"></circle>
+<circle cx="650" cy="215" fill="#3B82F6" r="3"></circle>
+<circle cx="700" cy="230" fill="#3B82F6" r="3"></circle>
+<circle cx="750" cy="235" fill="#3B82F6" r="3"></circle>
+</g>
+<!-- Target Line (Dashed Grey) -->
+<line opacity="0.5" stroke="#727785" stroke-dasharray="8 4" stroke-width="1.5" x1="0" x2="800" y1="120" y2="280"></line>
+<!-- Primary Trend Line (Bold Blue) -->
+<path d="M0,120 Q100,125 200,140 T400,180 T600,210 T800,250" fill="none" stroke="#0058be" stroke-linecap="round" stroke-width="3"></path>
+<!-- Labels -->
+<text class="font-label-xs-mono fill-text-muted" x="5" y="245">80 kg (Target)</text>
+</svg>
+</div>
+<div class="mt-4 flex justify-between">
+<span class="font-label-xs-mono text-label-xs-mono text-text-muted">AUG 1</span>
+<span class="font-label-xs-mono text-label-xs-mono text-text-muted">AUG 15</span>
+<span class="font-label-xs-mono text-label-xs-mono text-text-muted">AUG 31</span>
+</div>
+</section>
+<!-- Insights Bento Grid -->
+<section class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-stack-gap">
+<!-- Energy Metric -->
+<div class="bg-surface border border-border-hairline rounded-2xl p-6 card-shadow flex flex-col justify-between">
+<header class="flex justify-between items-start mb-4">
+<span class="font-label-sm text-label-sm text-text-muted">Energy Balance</span>
+<span class="material-symbols-outlined text-primary">bolt</span>
+</header>
+<div>
+<p class="font-headline-md text-headline-md">1,820 <span class="text-label-xs-mono text-text-muted">in</span></p>
+<p class="font-label-sm text-label-sm text-secondary font-medium">Deficit maintained</p>
+</div>
+</div>
+<!-- Protein Metric -->
+<div class="bg-surface border border-border-hairline rounded-2xl p-6 card-shadow flex flex-col justify-between">
+<header class="flex justify-between items-start mb-4">
+<span class="font-label-sm text-label-sm text-text-muted">Protein Target</span>
+<span class="material-symbols-outlined text-secondary">fitness_center</span>
+</header>
+<div>
+<p class="font-headline-md text-headline-md">165g</p>
+<p class="font-label-sm text-label-sm text-text-muted">92% of daily goal</p>
+</div>
+</div>
+<!-- Activity Metric -->
+<div class="bg-surface border border-border-hairline rounded-2xl p-6 card-shadow flex flex-col justify-between">
+<header class="flex justify-between items-start mb-4">
+<span class="font-label-sm text-label-sm text-text-muted">Active Burn</span>
+<span class="material-symbols-outlined text-status-warning">speed</span>
+</header>
+<div>
+<p class="font-headline-md text-headline-md">450 <span class="text-label-xs-mono text-text-muted">kcal</span></p>
+<p class="font-label-sm text-label-sm text-text-muted">+12% vs last week</p>
+</div>
+</div>
+<!-- Focus Image/Card -->
+<div class="relative bg-surface border border-border-hairline rounded-2xl overflow-hidden card-shadow group">
+<div class="absolute inset-0 z-0 transition-transform duration-700 group-hover:scale-110">
+<div class="w-full h-full bg-cover bg-center" data-alt="A macro photography shot of fresh, vibrant health food like avocado, nuts, and berries in a bright, minimalist kitchen setting with soft morning sunlight streaming through a window. The style is clean, modern, and clinical yet inviting, reflecting a deterministic calm aesthetic with a palette of whites and soft greens." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuDRKMv46wJZJtkgiZc1cIX5tVTIhb0v6bkLNFjne062FLCYJvqGm3x9RuNq_eds2j1h6DLSRKrJylwTGM8ytLVhJhS-wz4hB2twTpjgjvLJiWSpA261MFHUAvTK3En6AiHxYMR3hwctFDpjo8Sm1bJvKGmsgtfy9-3AQq9V9SfQhA6xloahkTAiWL5amvfvxPlDC8epzlfRAxJOXQrdn07EvcLCkfid2_RSQEenTvJm5PjfMO3kcKTWUBbqohhskI_Wn9zkO_o8aDk8')"></div>
+</div>
+<div class="relative z-10 p-6 h-full flex flex-col justify-end bg-gradient-to-t from-on-surface/60 to-transparent">
+<span class="font-label-sm text-label-sm text-surface uppercase font-bold tracking-widest mb-1">Recipe Focus</span>
+<h3 class="text-surface font-headline-md leading-tight">Lean Macro Bowl</h3>
+</div>
+</div>
+</section>
+</main>
+<!-- Bottom Navigation (Mobile Only) -->
+<nav class="md:hidden fixed bottom-0 w-full bg-surface/90 backdrop-blur-md border-t border-border-hairline z-50">
+<div class="flex justify-around items-center h-16">
+<a class="flex flex-col items-center gap-1 text-primary" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">dashboard</span>
+<span class="text-[10px] font-medium">Home</span>
+</a>
+<a class="flex flex-col items-center gap-1 text-on-surface-variant" href="#">
+<span class="material-symbols-outlined">add_circle</span>
+<span class="text-[10px] font-medium">Log</span>
+</a>
+<a class="flex flex-col items-center gap-1 text-on-surface-variant" href="#">
+<span class="material-symbols-outlined">monitoring</span>
+<span class="text-[10px] font-medium">Trends</span>
+</a>
+<a class="flex flex-col items-center gap-1 text-on-surface-variant" href="#">
+<span class="material-symbols-outlined">person</span>
+<span class="text-[10px] font-medium">Profile</span>
+</a>
+</div>
+</nav>
+<!-- Footer -->
+<footer class="w-full py-10 bg-background border-t border-border-hairline">
+<div class="flex flex-col md:flex-row justify-between items-center gap-stack-gap px-container-padding max-w-[1200px] mx-auto">
+<span class="font-label-sm text-label-sm font-medium text-secondary">© 2024 TrendCut</span>
+<div class="flex gap-6">
+<a class="text-text-muted hover:text-primary transition-colors font-label-sm text-label-sm" href="#">Export Data</a>
+<a class="text-text-muted hover:text-primary transition-colors font-label-sm text-label-sm" href="#">Privacy</a>
+</div>
+</div>
+</footer>
+<script>
+        // Micro-interactions and data simulations
+        document.querySelectorAll('.active\\:scale-95').forEach(button => {
+            button.addEventListener('mousedown', () => {
+                button.style.transform = 'scale(0.95)';
+            });
+            button.addEventListener('mouseup', () => {
+                button.style.transform = 'scale(1)';
+            });
+        });
+
+        // Simple visibility observer for cards
+        const observerOptions = {
+            threshold: 0.1
+        };
+
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('opacity-100', 'translate-y-0');
+                    entry.target.classList.remove('opacity-0', 'translate-y-4');
+                }
+            });
+        }, observerOptions);
+
+        document.querySelectorAll('section');
+    </script></body></html>
