@@ -148,18 +148,23 @@ class Storage:
         return self.get_entry(date)  # type: ignore[return-value]
 
     def get_entry(self, date: str) -> Entry | None:
-        row = self._conn.execute("SELECT * FROM entries WHERE date = ?", (date,)).fetchone()
+        # Reads take the lock too: the connection is shared across the threadpool
+        # FastAPI runs sync handlers in, and unsynchronized concurrent fetches on
+        # one sqlite3 connection corrupt each other's results.
+        with self._lock:
+            row = self._conn.execute("SELECT * FROM entries WHERE date = ?", (date,)).fetchone()
         return _row_to_entry(row) if row is not None else None
 
     def list_entries(self, start: str | None = None, end: str | None = None) -> list[Entry]:
         """All entries (ordered by date), optionally restricted to [start, end]."""
-        if start is not None and end is not None:
-            rows = self._conn.execute(
-                "SELECT * FROM entries WHERE date BETWEEN ? AND ? ORDER BY date",
-                (start, end),
-            ).fetchall()
-        else:
-            rows = self._conn.execute("SELECT * FROM entries ORDER BY date").fetchall()
+        with self._lock:
+            if start is not None and end is not None:
+                rows = self._conn.execute(
+                    "SELECT * FROM entries WHERE date BETWEEN ? AND ? ORDER BY date",
+                    (start, end),
+                ).fetchall()
+            else:
+                rows = self._conn.execute("SELECT * FROM entries ORDER BY date").fetchall()
         return [_row_to_entry(r) for r in rows]
 
     def delete_entry(self, date: str) -> bool:
@@ -171,7 +176,8 @@ class Storage:
 
     # --- settings ---------------------------------------------------------- #
     def get_settings(self) -> Settings:
-        row = self._conn.execute("SELECT * FROM settings WHERE id = 1").fetchone()
+        with self._lock:
+            row = self._conn.execute("SELECT * FROM settings WHERE id = 1").fetchone()
         return Settings(
             alpha=row["alpha"],
             window_days=row["window_days"],

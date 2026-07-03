@@ -7,11 +7,12 @@ plateau has set in versus when you're just looking at water weight. The estimati
 logic is deterministic and mathematically defined, which makes it unusually easy to
 test — see [`PRD.md`](PRD.md) for the full design.
 
-> **Status:** Phase 6 — the estimation core plus a thin API over it are complete.
-> A framework-free SQLite storage layer and a FastAPI app expose entry CRUD,
-> settings, CSV import/export, and an `/estimate` endpoint that recomputes the trend,
-> TDEE, and plateau verdict from raw entries on every call (nothing derived is ever
-> stored). See [Running the API](#running-the-api) below. The estimation core:
+> **Status:** Phase 7 — the estimation core, the thin API, and the first frontend
+> screens are complete. A static dashboard (hand-rolled HTML/CSS/vanilla JS, no
+> frameworks, no charting library) renders the TDEE hero with its confidence range,
+> a from-scratch SVG weight-trend chart, the graded plateau status, and a pace
+> readout, plus a log-entry modal — all served by the API itself. See
+> [Running the app](#running-the-app) below. The estimation core:
 > the synthetic
 > ground-truth generator (`estimator/synthetic.py`), the gap-aware EWMA trend
 > smoother (`estimator/smoothing.py`), the rolling-regression TDEE estimator
@@ -35,6 +36,9 @@ estimator/      # pure, framework-free estimation engine (the unit under test)
   tdee.py       # rolling regression + energy-balance TDEE estimate
   plateau.py    # graded plateau classifier
   synthetic.py  # synthetic ground-truth data generation for tests
+api/            # thin FastAPI + SQLite layer (entry CRUD, settings, /estimate, CSV)
+web/            # static frontend: dashboard + log modal, hand-rolled SVG chart
+  js/chart-math.js  # pure coordinate/tick math (no DOM), consumed by chart.js
 examples/       # runnable demos (simulate/smoothing/tdee/plateau _demo.py)
 tests/          # pytest + hypothesis suite
 ```
@@ -71,16 +75,35 @@ $env:HYPOTHESIS_PROFILE="deep"; pytest tests/test_properties.py -q; Remove-Item 
 These three are exactly what CI runs on every push and pull request (see
 [`.github/workflows/ci.yml`](.github/workflows/ci.yml)).
 
-## Running the API
+## Running the app
 
-The `api/` package is a thin FastAPI + SQLite layer over the pure estimator. Start
-it with uvicorn (after `pip install -e ".[dev]"`):
+The `api/` package is a thin FastAPI + SQLite layer over the pure estimator, and it
+also serves the static frontend in `web/` (no build step — plain HTML, hand-rolled
+CSS, and vanilla-JS ES modules). Start it with uvicorn (after
+`pip install -e ".[dev]"`):
 
 ```bash
 uvicorn api.app:app --reload
 ```
 
-It serves on `http://127.0.0.1:8000` and writes to `./trendcut.db` by default;
+Then open **http://127.0.0.1:8000/** in a browser for the dashboard:
+
+* **TDEE hero** — the current estimate with its 95% CI, honestly downgraded to
+  "Not enough data yet" (`insufficient_data`) or visibly flagged
+  (`low_confidence`) when the estimator declines to commit.
+* **Weight trend chart** — hand-rolled SVG (no charting library, PRD FR-22): faint
+  raw weigh-ins, the bold EWMA trend line, a dashed target line, 7/30/90-day/All
+  ranges.
+* **Plateau status + pace** — the graded on-track/slowing/stalled verdict with the
+  estimator's plain-language explanation, the implied daily deficit, projected
+  rate, and an on-pace-for-target readout.
+* **Log entry** — the "Log entry" button (or the + button on mobile) opens a modal
+  for date + weight + calories; either field may be left blank (weight-only /
+  calorie-only days). Soft input-guard warnings from the API are shown inline
+  without blocking the save; picking a date with an existing entry prefills it for
+  editing.
+
+The API serves on `http://127.0.0.1:8000` and writes to `./trendcut.db` by default;
 override the DB path with the `TRENDCUT_DB` environment variable. Interactive API
 docs are at `http://127.0.0.1:8000/docs`.
 

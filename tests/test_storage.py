@@ -8,6 +8,8 @@ shared state and no reliance on a real DB file.
 
 from __future__ import annotations
 
+import threading
+
 import pytest
 
 from api.storage import Storage
@@ -102,3 +104,33 @@ def test_settings_persist_across_reads(store: Storage) -> None:
     s = store.get_settings()
     assert s.target_weight == 75.0
     assert s.target_date == "2026-08-31"
+
+
+def test_concurrent_reads_are_safe(store: Storage) -> None:
+    """Regression: FastAPI serves sync handlers from a threadpool, so reads hit the
+    shared connection concurrently (e.g. the dashboard fires /estimate and /settings
+    in parallel). Unlocked reads corrupted each other's fetches (wrong-shape/None
+    rows); all reads must therefore hold the storage lock."""
+    for i in range(1, 29):
+        store.upsert_entry(f"2026-01-{i:02d}", 80.0 - i * 0.05, 2000)
+
+    errors: list[Exception] = []
+
+    def hammer(fn) -> None:
+        try:
+            for _ in range(2000):
+                fn()
+        except Exception as exc:  # noqa: BLE001 - any corruption error fails the test
+            errors.append(exc)
+
+    threads = [
+        threading.Thread(target=hammer, args=(store.get_settings,)),
+        threading.Thread(target=hammer, args=(store.list_entries,)),
+        threading.Thread(target=hammer, args=(lambda: store.get_entry("2026-01-05"),)),
+        threading.Thread(target=hammer, args=(store.get_settings,)),
+    ]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    assert errors == []

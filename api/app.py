@@ -16,9 +16,11 @@ from __future__ import annotations
 
 import datetime as _dt
 import os
+from pathlib import Path
 
 from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.responses import JSONResponse, PlainTextResponse
+from fastapi.staticfiles import StaticFiles
 
 from api.csv_io import entries_to_csv, entries_to_json, parse_entries_csv
 from api.estimation import compute_estimate
@@ -139,6 +141,11 @@ def create_app(storage: Storage | None = None) -> FastAPI:
     @app.get("/estimate", response_model=EstimateResponse)
     def estimate(store: Storage = Depends(get_storage)) -> EstimateResponse:
         return compute_estimate(store.list_entries(), store.get_settings())
+
+    # --- frontend ----------------------------------------------------------- #
+    # Static mount only (no business logic). Mounted last so the API routes above
+    # always match first; `html=True` serves web/index.html at "/".
+    app.mount("/", StaticFiles(directory=Path(__file__).resolve().parent.parent / "web", html=True))
 
     return app
 

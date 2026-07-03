@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TrendCut</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+    rel="stylesheet"
+  />
+  <link rel="stylesheet" href="/css/app.css" />
+  <script type="module" src="/js/app.js"></script>
+</head>
+<body>
+  <!-- Top app bar -->
+  <header class="topbar">
+    <div class="topbar-inner">
+      <span class="brand">TrendCut</span>
+      <button class="btn btn-primary" id="open-log-btn" type="button">Log entry</button>
+    </div>
+  </header>
+
+  <main class="page">
+    <div class="page-error" id="page-error" hidden></div>
+
+    <!-- Hero: TDEE + pace -->
+    <section class="hero-grid">
+      <article class="card hero-card">
+        <header class="card-label">Estimated TDEE</header>
+        <div class="hero-number">
+          <span class="hero-value" id="tdee-value">–</span>
+          <span class="unit-mono" id="tdee-unit" hidden>kcal</span>
+          <span class="chip chip-warning" id="low-conf-chip" hidden>Low confidence</span>
+        </div>
+        <p class="hero-ci" id="tdee-ci"></p>
+        <div class="hero-footer">
+          <div class="status-block">
+            <span class="card-label">Status</span>
+            <div class="status-line">
+              <span class="status-dot" id="plateau-dot"></span>
+              <span class="status-text" id="plateau-state">–</span>
+            </div>
+          </div>
+          <p class="status-explain" id="plateau-explain"></p>
+        </div>
+      </article>
+
+      <article class="card pace-card">
+        <header class="card-label">Current pace</header>
+        <div class="pace-rows">
+          <div class="pace-deficit">
+            <div class="pace-deficit-line">
+              <span class="pace-row-label" id="deficit-label">Daily deficit</span>
+              <span class="pace-deficit-value"
+                ><span id="deficit-value">–</span><span class="unit-mono"> kcal</span></span
+              >
+            </div>
+            <div class="pace-bar"><div class="pace-bar-fill" id="deficit-bar"></div></div>
+          </div>
+          <div class="pace-row">
+            <span class="pace-row-label">Projected rate</span>
+            <span class="pace-row-value" id="rate-value">–</span>
+          </div>
+          <div class="pace-chip" id="pace-chip">
+            <span id="pace-chip-text">–</span>
+          </div>
+        </div>
+      </article>
+    </section>
+
+    <!-- Weight trend chart -->
+    <section class="card chart-card">
+      <div class="chart-header">
+        <div>
+          <h2 class="chart-title">Weight Trend</h2>
+          <p class="chart-subtitle" id="chart-subtitle">Last 30 days</p>
+        </div>
+        <div class="range-group" role="group" aria-label="Chart range">
+          <button class="range-btn" type="button" data-range="7">7D</button>
+          <button class="range-btn is-active" type="button" data-range="30">30D</button>
+          <button class="range-btn" type="button" data-range="90">90D</button>
+          <button class="range-btn" type="button" data-range="all">All</button>
+        </div>
+      </div>
+      <div class="chart-area" id="chart"></div>
+    </section>
+
+    <!-- Small metrics -->
+    <section class="metrics-grid">
+      <article class="card metric-card">
+        <header class="card-label">Trend weight</header>
+        <p class="metric-value"><span id="trend-weight">–</span><span class="unit-mono" id="trend-weight-unit" hidden> kg</span></p>
+        <p class="metric-note" id="trend-weight-note"></p>
+      </article>
+      <article class="card metric-card">
+        <header class="card-label">Window intake</header>
+        <p class="metric-value"><span id="mean-intake">–</span><span class="unit-mono" id="mean-intake-unit" hidden> kcal</span></p>
+        <p class="metric-note" id="mean-intake-note"></p>
+      </article>
+    </section>
+  </main>
+
+  <!-- Mobile floating log button -->
+  <button class="fab" id="open-log-fab" type="button" aria-label="Log entry">+</button>
+
+  <!-- Log entry modal -->
+  <div class="modal-overlay" id="log-overlay" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="log-title">
+      <div class="modal-header">
+        <div>
+          <h2 class="modal-title" id="log-title">New Entry</h2>
+          <p class="modal-subtitle">Weight-only or calorie-only days are fine.</p>
+        </div>
+        <button class="modal-close" id="log-close-btn" type="button" aria-label="Close">&times;</button>
+      </div>
+      <form class="modal-form" id="log-form" novalidate>
+        <div class="field">
+          <label class="field-label" for="log-date">Date</label>
+          <div class="field-box">
+            <input class="field-input" id="log-date" name="date" type="date" required />
+          </div>
+        </div>
+        <div class="field-grid">
+          <div class="field">
+            <label class="field-label" for="log-weight">Weight</label>
+            <div class="field-box">
+              <input
+                class="field-input field-input-big"
+                id="log-weight"
+                name="weight"
+                type="number"
+                inputmode="decimal"
+                step="0.1"
+                placeholder="00.0"
+              />
+              <span class="unit-mono">kg</span>
+            </div>
+          </div>
+          <div class="field">
+            <label class="field-label" for="log-kcal">Calories</label>
+            <div class="field-box">
+              <input
+                class="field-input field-input-big"
+                id="log-kcal"
+                name="kcal"
+                type="number"
+                inputmode="numeric"
+                step="1"
+                placeholder="0000"
+              />
+              <span class="unit-mono">kcal</span>
+            </div>
+          </div>
+        </div>
+        <div class="form-warnings" id="log-warnings" hidden></div>
+        <div class="form-error" id="log-error" hidden></div>
+        <div class="modal-actions">
+          <button class="btn btn-primary btn-wide" id="log-save-btn" type="submit">Save entry</button>
+          <button class="btn btn-ghost btn-wide" id="log-cancel-btn" type="button">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</body>
+</html>
