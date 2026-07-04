@@ -21,6 +21,7 @@ from pathlib import Path
 from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.responses import JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.types import Scope
 
 from api.csv_io import entries_to_csv, entries_to_json, parse_entries_csv
 from api.estimation import compute_estimate, compute_tdee_history
@@ -60,6 +61,23 @@ def _entry_response(entry: Entry, warnings: list[str] | None = None) -> EntryRes
 def get_storage(request: Request) -> Storage:
     """Dependency: the app's Storage instance (overridden in tests)."""
     return request.app.state.storage
+
+
+class _NoCacheStaticFiles(StaticFiles):
+    """Serve the frontend with ``Cache-Control: no-cache``.
+
+    Starlette's StaticFiles sends only ``ETag``/``Last-Modified``; with no
+    ``Cache-Control`` a browser may *heuristically* reuse a cached asset without
+    revalidating, so a stale ``app.css``/JS can render against freshly-changed HTML
+    (e.g. right after a redeploy) until a manual hard refresh. ``no-cache`` keeps the
+    files cacheable but forces revalidation — an unchanged file is a cheap ``304``,
+    a changed one is fetched — so updates are always picked up automatically.
+    """
+
+    async def get_response(self, path: str, scope: Scope) -> Response:
+        response = await super().get_response(path, scope)
+        response.headers["Cache-Control"] = "no-cache"
+        return response
 
 
 def create_app(storage: Storage | None = None) -> FastAPI:
@@ -156,8 +174,10 @@ def create_app(storage: Storage | None = None) -> FastAPI:
 
     # --- frontend ----------------------------------------------------------- #
     # Static mount only (no business logic). Mounted last so the API routes above
-    # always match first; `html=True` serves web/index.html at "/".
-    app.mount("/", StaticFiles(directory=Path(__file__).resolve().parent.parent / "web", html=True))
+    # always match first; `html=True` serves web/index.html at "/". Served with
+    # no-cache so edits/redeploys don't leave a stale stylesheet cached.
+    web_dir = Path(__file__).resolve().parent.parent / "web"
+    app.mount("/", _NoCacheStaticFiles(directory=web_dir, html=True))
 
     return app
 
