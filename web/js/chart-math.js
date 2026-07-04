@@ -45,6 +45,19 @@ export function linearScale(d0, d1, r0, r1) {
 }
 
 /**
+ * Inverse of the day-index→pixel mapping: given a pixel x, return the nearest data
+ * index for a series of `n` points evenly spaced across [x0, x1]. Pure — the
+ * counterpart the tooltip hit-testing uses. Returns -1 for an empty series; the
+ * result is clamped to [0, n-1] so an off-plot cursor snaps to the nearest end.
+ */
+export function nearestIndex(px, x0, x1, n) {
+  if (n <= 0) return -1;
+  if (n === 1) return 0;
+  const idx = Math.round(((px - x0) / (x1 - x0)) * (n - 1));
+  return Math.max(0, Math.min(n - 1, idx));
+}
+
+/**
  * "Nice" tick values covering [lo, hi]: picks a 1/2/5×10^k step so that at most
  * `count`+1 ticks land inside the domain, aligned to round numbers.
  */

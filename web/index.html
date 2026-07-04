@@ -89,11 +89,20 @@
           <button class="range-btn" type="button" data-range="all">All</button>
         </div>
       </div>
-      <div class="chart-area" id="chart"></div>
+      <div class="chart-wrap">
+        <div class="chart-area" id="chart"></div>
+        <div class="chart-cursor" id="chart-cursor" hidden></div>
+        <div class="chart-tooltip" id="chart-tooltip" role="status" hidden></div>
+      </div>
     </section>
 
     <!-- Small metrics -->
-    <section class="metrics-grid">
+    <section class="metrics-grid metrics-grid-3">
+      <article class="card metric-card">
+        <header class="card-label">Latest weigh-in</header>
+        <p class="metric-value"><span id="raw-value">–</span><span class="unit-mono" id="raw-unit" hidden> kg</span></p>
+        <p class="metric-note" id="raw-note"></p>
+      </article>
       <article class="card metric-card">
         <header class="card-label">Trend weight</header>
         <p class="metric-value"><span id="trend-weight">–</span><span class="unit-mono" id="trend-weight-unit" hidden> kg</span></p>

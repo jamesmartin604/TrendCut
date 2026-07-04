@@ -42,12 +42,12 @@ export function renderWeightChart(container, { points, targetWeight, unitLabel =
   if (!hasWeight) {
     container.innerHTML =
       '<div class="chart-empty">No weigh-ins yet — log your first entry and the trend will appear here.</div>';
-    return;
+    return null;
   }
 
   const width = container.clientWidth;
   const height = container.clientHeight;
-  if (width === 0 || height === 0) return;
+  if (width === 0 || height === 0) return null;
 
   const x0 = MARGIN.left;
   const x1 = width - MARGIN.right;
@@ -130,4 +130,26 @@ export function renderWeightChart(container, { points, targetWeight, unitLabel =
   }
 
   container.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Weight trend chart">${parts.join("")}</svg>`;
+
+  // Geometry for hit-testing (tooltip). Values are in the SAME display units passed
+  // in; positions are in the SVG's viewBox space, which equals the container's
+  // pixel space (viewBox is 0 0 width height). The caller uses `nearestIndex` with
+  // x0/x1 to invert a cursor x back to a data point.
+  return {
+    width,
+    height,
+    x0,
+    x1,
+    y0,
+    y1,
+    points: points.map((p, i) => ({
+      i,
+      date: p.date,
+      weight: p.weight_kg,
+      trend: p.trend_kg,
+      xPos: xScale(i),
+      yWeight: p.weight_kg == null ? null : yScale(p.weight_kg),
+      yTrend: p.trend_kg == null ? null : yScale(p.trend_kg),
+    })),
+  };
 }

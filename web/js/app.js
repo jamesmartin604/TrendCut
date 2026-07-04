@@ -9,6 +9,7 @@
  */
 
 import { getEntry, getEstimate, getSettings, putEntry } from "./api.js";
+import { nearestIndex } from "./chart-math.js";
 import { renderWeightChart } from "./chart.js";
 import { formatWeight, fromKg, toKg, unitLabel } from "./units.js";
 
@@ -18,6 +19,7 @@ const state = {
   estimate: null,
   settings: null,
   range: "30", // chart range in days, or "all"
+  chartGeometry: null, // hit-test geometry from the last chart render (tooltip)
 };
 
 // Display unit preference (stored data stays kg; this only affects presentation).
@@ -208,6 +210,130 @@ function renderMetrics() {
   }
 }
 
+// ---------- latest raw weigh-in card ---------- //
+
+function renderRawWeightCard() {
+  const u = units();
+  const trend = state.estimate.trend;
+  const rawEl = $("raw-value");
+  const unitEl = $("raw-unit");
+  const noteEl = $("raw-note");
+
+  // "Current" means the most recent logged day. If that day has no weigh-in
+  // (calorie-only) or there's no data at all, show an honest empty state rather
+  // than surfacing a stale older number as if it were today's.
+  const latest = trend.length ? trend[trend.length - 1] : null;
+  if (!latest || latest.weight_kg == null) {
+    rawEl.textContent = "No recent weigh-in";
+    rawEl.classList.add("is-muted");
+    unitEl.hidden = true;
+    noteEl.textContent = latest
+      ? `${fmtDateHuman(new Date(`${latest.date}T00:00:00Z`))} was a calorie-only day`
+      : "Log a weight to see it here";
+    return;
+  }
+
+  rawEl.textContent = formatWeight(latest.weight_kg, u);
+  rawEl.classList.remove("is-muted");
+  unitEl.textContent = ` ${unitLabel(u)}`;
+  unitEl.hidden = false;
+
+  const dateStr = fmtDateHuman(new Date(`${latest.date}T00:00:00Z`));
+  // Trend comparison only with >= 2 weigh-ins — a single seed's trend equals the
+  // raw value and would be a meaningless "0 above trend".
+  const weighIns = trend.reduce((n, p) => n + (p.weight_kg != null ? 1 : 0), 0);
+  if (latest.trend_kg != null && weighIns >= 2) {
+    const ul = unitLabel(u);
+    const trendDisp = formatWeight(latest.trend_kg, u);
+    const diff = fromKg(latest.weight_kg - latest.trend_kg, u);
+    if (Math.abs(diff) < 0.05) {
+      noteEl.textContent = `${dateStr} · trend ${trendDisp} ${ul} · on trend`;
+    } else {
+      const sign = diff > 0 ? "+" : "−";
+      const dir = diff > 0 ? "above" : "below";
+      noteEl.textContent =
+        `${dateStr} · trend ${trendDisp} ${ul} · ${sign}${Math.abs(diff).toFixed(1)} ${dir} trend`;
+    }
+  } else {
+    noteEl.textContent = `${dateStr} · trend needs another weigh-in`;
+  }
+}
+
+// ---------- chart tooltip (hover / tap) ---------- //
+
+function hideChartTooltip() {
+  $("chart-tooltip").hidden = true;
+  $("chart-cursor").hidden = true;
+}
+
+/** Nearest point that actually has a raw weigh-in, scanning out from `idx`. */
+function nearestWeighIn(points, idx) {
+  for (let d = 0; d < points.length; d += 1) {
+    const before = points[idx - d];
+    if (before && before.weight != null) return before;
+    const after = points[idx + d];
+    if (after && after.weight != null) return after;
+  }
+  return null;
+}
+
+function updateChartTooltip(clientX) {
+  const geom = state.chartGeometry;
+  const el = $("chart");
+  if (!geom) return hideChartTooltip();
+  const rect = el.getBoundingClientRect();
+  if (rect.width === 0) return hideChartTooltip();
+
+  // Map the cursor back to viewBox space (== chart pixel space at render time).
+  const vbX = (clientX - rect.left) * (geom.width / rect.width);
+  const idx = nearestIndex(vbX, geom.x0, geom.x1, geom.points.length);
+  if (idx < 0) return hideChartTooltip();
+  const near = geom.points[idx];
+  const p = near.weight != null ? near : nearestWeighIn(geom.points, idx);
+  if (!p) return hideChartTooltip();
+
+  // Only show when the cursor is genuinely near the point's column.
+  if (Math.abs(p.xPos - vbX) > 30) return hideChartTooltip();
+
+  const ul = unitLabel(units());
+  const tip = $("chart-tooltip");
+  const trendTxt = p.trend == null ? "—" : `${p.trend.toFixed(1)} ${ul}`;
+  tip.innerHTML =
+    `<div class="tt-date">${fmtDateHuman(new Date(`${p.date}T00:00:00Z`))}</div>` +
+    `<div class="tt-row"><span class="tt-k">raw</span><span class="tt-v">${p.weight.toFixed(1)} ${ul}</span></div>` +
+    `<div class="tt-row"><span class="tt-k tt-k-trend">trend</span><span class="tt-v">${trendTxt}</span></div>`;
+  tip.hidden = false;
+
+  const cursor = $("chart-cursor");
+  cursor.style.left = `${p.xPos}px`;
+  cursor.style.top = `${p.yWeight}px`;
+  cursor.hidden = false;
+
+  // Center above the point; flip below near the top edge; clamp within the chart.
+  const tw = tip.offsetWidth;
+  const th = tip.offsetHeight;
+  let left = p.xPos - tw / 2;
+  left = Math.max(4, Math.min(left, geom.width - tw - 4));
+  let top = p.yWeight - th - 12;
+  if (top < 4) top = p.yWeight + 14;
+  tip.style.left = `${left}px`;
+  tip.style.top = `${top}px`;
+}
+
+function wireChartTooltip() {
+  const el = $("chart");
+  const move = (e) => updateChartTooltip(e.clientX);
+  el.addEventListener("pointermove", move);
+  el.addEventListener("pointerdown", move); // touch tap / mouse click
+  el.addEventListener("pointerleave", (e) => {
+    if (e.pointerType === "mouse") hideChartTooltip();
+  });
+  // Tapping/clicking outside the chart dismisses the tooltip (touch).
+  document.addEventListener("pointerdown", (e) => {
+    if (!el.contains(e.target)) hideChartTooltip();
+  });
+}
+
 // ---------- chart ---------- //
 
 function chartPoints() {
@@ -225,11 +351,12 @@ function renderChart() {
     weight_kg: fromKg(p.weight_kg, u),
     trend_kg: fromKg(p.trend_kg, u),
   }));
-  renderWeightChart($("chart"), {
+  state.chartGeometry = renderWeightChart($("chart"), {
     points: disp,
     targetWeight: fromKg(state.settings.target_weight, u),
     unitLabel: unitLabel(u),
   });
+  hideChartTooltip(); // a re-render (resize / range change) invalidates any open tooltip
   $("chart-subtitle").textContent =
     state.range === "all" ? "All logged days" : `Last ${state.range} days`;
 }
@@ -364,6 +491,7 @@ function renderAll() {
   renderHero();
   renderPlateau();
   renderPace();
+  renderRawWeightCard();
   renderMetrics();
   renderChart();
 }
@@ -378,6 +506,7 @@ async function refresh() {
 async function init() {
   wireModal();
   wireRangeButtons();
+  wireChartTooltip();
 
   // Redraw the chart when its box resizes (responsive, PRD §8).
   const chartEl = $("chart");
