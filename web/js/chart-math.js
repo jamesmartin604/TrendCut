@@ -23,6 +23,24 @@ export function extent(values) {
 }
 
 /**
+ * First and last index where `values[i]` is a real number (not null/NaN), as
+ * `[first, last]`; `null` if none qualify. Used to frame an axis to the sub-range
+ * that actually has data (e.g. clip the TDEE chart to the estimable window instead
+ * of the full logging period).
+ */
+export function definedRange(values) {
+  let first = -1;
+  let last = -1;
+  for (let i = 0; i < values.length; i += 1) {
+    const v = values[i];
+    if (v == null || Number.isNaN(v)) continue;
+    if (first === -1) first = i;
+    last = i;
+  }
+  return first === -1 ? null : [first, last];
+}
+
+/**
  * Pad a [lo, hi] domain outward by `frac` of its span on each side, so points
  * never sit on the chart edge. A degenerate (zero-span) domain gets an absolute
  * ±`minPad` so it still renders.

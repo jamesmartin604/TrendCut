@@ -9,6 +9,7 @@
  */
 
 import {
+  definedRange,
   extent,
   formatDayLabel,
   linearScale,
@@ -59,13 +60,18 @@ function estimateRuns(points) {
  *          ci_low: number|null, ci_high: number|null}[]}} data the /tdee-history series
  */
 export function renderTdeeChart(container, { points }) {
-  const runs = estimateRuns(points);
-  const anyEstimate = runs.some((r) => r.length > 0);
-  if (!anyEstimate) {
+  // Frame the x-axis to the ESTIMABLE range — the first through last day that has a
+  // real estimate — not the full logging period. The pre-window warm-up days have
+  // no TDEE and must not stretch the axis (otherwise the line is crushed to the
+  // right edge). If nothing is estimable yet, show the honest empty state.
+  const xRange = definedRange(points.map((p) => p.tdee));
+  if (xRange === null) {
     container.innerHTML =
       '<div class="chart-empty">Not enough data yet to chart TDEE over time — keep logging and the estimate history will build up here.</div>';
     return;
   }
+  const [iFirst, iLast] = xRange;
+  const runs = estimateRuns(points);
 
   const width = container.clientWidth;
   const height = container.clientHeight;
@@ -76,13 +82,16 @@ export function renderTdeeChart(container, { points }) {
   const y0 = MARGIN.top;
   const y1 = height - MARGIN.bottom;
 
-  // Domain spans every confidence bound so the band always fits.
+  // y-domain fits the plotted estimate values + their confidence bounds; x-domain
+  // clips to [iFirst, iLast] with a small symmetric pad (~a few % of the span, at
+  // least half a day) so the end points don't sit on the axis edges.
   const bounds = [];
   for (const p of points) {
     if (p.tdee != null) bounds.push(p.ci_low, p.ci_high, p.tdee);
   }
   const [dLo, dHi] = padDomain(extent(bounds), 0.1, 50);
-  const xScale = linearScale(0, Math.max(points.length - 1, 1), x0, x1);
+  const [xLo, xHi] = padDomain([iFirst, iLast], 0.03, 0.5);
+  const xScale = linearScale(xLo, xHi, x0, x1);
   const yScale = linearScale(dLo, dHi, y1, y0); // inverted: more kcal = higher up
 
   const dates = points.map((p) => p.date);
@@ -138,9 +147,11 @@ export function renderTdeeChart(container, { points }) {
     `<circle cx="${round1(xScale(lastPt.i))}" cy="${round1(yScale(lastPt.tdee))}" r="4" fill="${COLOR.line}"/>`,
   );
 
-  // X labels.
-  for (const i of xLabelIndices(points.length, 2)) {
-    const anchor = i === 0 ? "start" : i === points.length - 1 ? "end" : "middle";
+  // X labels — spaced across the FRAMED range [iFirst, iLast], not the full series.
+  const subLen = iLast - iFirst + 1;
+  for (const rel of xLabelIndices(subLen, 2)) {
+    const i = iFirst + rel;
+    const anchor = rel === 0 ? "start" : rel === subLen - 1 ? "end" : "middle";
     parts.push(
       `<text class="chart-axis-label" x="${round1(xScale(i))}" y="${y1 + 20}" ` +
         `text-anchor="${anchor}">${formatDayLabel(dates[i])}</text>`,
