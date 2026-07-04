@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TrendCut · History</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+    rel="stylesheet"
+  />
+  <link rel="stylesheet" href="/css/app.css" />
+  <script type="module" src="/js/history.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <span class="brand">TrendCut</span>
+      <nav class="topnav" aria-label="Primary">
+        <a class="topnav-link" href="/">Dashboard</a>
+        <a class="topnav-link" href="/tdee.html">TDEE</a>
+        <a class="topnav-link is-active" href="/history.html" aria-current="page">History</a>
+        <a class="topnav-link" href="/settings.html">Settings</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="page">
+    <div class="page-error" id="page-error" hidden></div>
+
+    <header class="page-head">
+      <h1 class="page-title">History</h1>
+      <p class="page-subtitle">Every logged day, newest first — edit or delete any entry.</p>
+    </header>
+
+    <!-- Weekly summary -->
+    <section class="settings-group" id="weekly-section" hidden>
+      <h2 class="settings-group-label">Weekly summary (Mon–Sun)</h2>
+      <div class="weekly-list" id="weekly-list"></div>
+    </section>
+
+    <!-- All entries -->
+    <section class="settings-group">
+      <h2 class="settings-group-label">All entries</h2>
+      <div class="settings-card" id="entries-card">
+        <div class="entries-empty" id="entries-empty" hidden>
+          No entries yet — log a day from the Dashboard and it'll appear here.
+        </div>
+        <div id="entries-list"></div>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

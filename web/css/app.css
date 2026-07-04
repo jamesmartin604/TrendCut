@@ -1159,3 +1159,162 @@ body {
     aspect-ratio: 4 / 3;
   }
 }
+
+/* ============================================================= */
+/* History screen — entry list, weekly summary                   */
+/* ============================================================= */
+.entries-empty {
+  padding: 32px var(--container-padding);
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+.entry-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 16px var(--container-padding);
+  border-bottom: 1px solid var(--border-hairline);
+}
+
+.entry-row:last-child {
+  border-bottom: none;
+}
+
+.entry-date {
+  font-weight: 600;
+  font-size: 15px;
+  min-width: 116px;
+}
+
+.entry-vals {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--on-surface-variant);
+}
+
+.entry-dot {
+  color: var(--text-muted);
+  opacity: 0.5;
+}
+
+.entry-actions,
+.entry-confirm {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.entry-confirm-text {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-right: 4px;
+}
+
+.entry-btn {
+  border: 1px solid var(--border-hairline);
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  padding: 6px 14px;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--on-surface-variant);
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.entry-btn:hover {
+  background: var(--surface-container-low);
+}
+
+.entry-btn-danger {
+  color: #9b3535;
+}
+
+.entry-btn-danger:hover {
+  background: rgba(186, 26, 26, 0.06);
+}
+
+.weekly-list {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--stack-gap);
+}
+
+.weekly-card {
+  padding: 20px var(--container-padding);
+}
+
+.weekly-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.weekly-range {
+  font-weight: 600;
+  font-size: 15px;
+}
+
+.weekly-adherence {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.weekly-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px 24px;
+}
+
+.weekly-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.weekly-k {
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.weekly-v {
+  font-family: var(--font-mono);
+  font-size: 15px;
+  color: var(--on-surface);
+}
+
+.export-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+/* Fixed date in the edit modal (History) */
+.field-input.is-readonly {
+  color: var(--on-surface-variant);
+  cursor: default;
+}
+
+@media (min-width: 768px) {
+  .weekly-list {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .weekly-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}

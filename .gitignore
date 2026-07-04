@@ -32,3 +32,6 @@ htmlcov/
 .vscode/
 .DS_Store
 Thumbs.db
+
+# Personal Claude Code settings (bypass mode, per-machine approvals) — do not commit
+.claude/settings.local.json

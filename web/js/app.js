@@ -8,10 +8,11 @@
  * flagged with its wide CI made prominent. No fallback TDEE is ever invented here.
  */
 
-import { getEntry, getEstimate, getSettings, putEntry } from "./api.js";
+import { getEstimate, getSettings } from "./api.js";
 import { nearestIndex } from "./chart-math.js";
 import { renderWeightChart } from "./chart.js";
-import { formatWeight, fromKg, toKg, unitLabel } from "./units.js";
+import { openEntryForm } from "./entry-form.js";
+import { formatWeight, fromKg, unitLabel } from "./units.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -373,116 +374,15 @@ function wireRangeButtons() {
   }
 }
 
-// ---------- log entry modal ---------- //
+// ---------- log entry (shared entry-form modal) ---------- //
 
-const modal = {
-  overlay: null,
-  form: null,
-
-  open() {
-    this.overlay.hidden = false;
-    $("log-error").hidden = true;
-    $("log-warnings").hidden = true;
-    $("log-save-btn").disabled = false;
-    $("log-save-btn").textContent = "Save entry";
-    $("log-weight-unit").textContent = unitLabel(units());
-    $("log-date").value = todayIso();
-    $("log-weight").value = "";
-    $("log-kcal").value = "";
-    this.prefill($("log-date").value);
-    $("log-weight").focus();
-  },
-
-  close() {
-    this.overlay.hidden = true;
-  },
-
-  /** Pull any existing entry for the date so re-logging edits, not surprises. */
-  async prefill(date) {
-    try {
-      const entry = await getEntry(date);
-      // Only apply if the user hasn't switched dates while we fetched.
-      if ($("log-date").value !== date) return;
-      $("log-weight").value =
-        entry?.weight_kg == null ? "" : formatWeight(entry.weight_kg, units());
-      $("log-kcal").value = entry?.kcal ?? "";
-    } catch {
-      /* prefill is best-effort; saving still works */
-    }
-  },
-
-  async save() {
-    const date = $("log-date").value;
-    const weightRaw = $("log-weight").value.trim();
-    const kcalRaw = $("log-kcal").value.trim();
-    const errorEl = $("log-error");
-    const warningsEl = $("log-warnings");
-    errorEl.hidden = true;
-    warningsEl.hidden = true;
-
-    if (!date) {
-      errorEl.textContent = "Pick a date.";
-      errorEl.hidden = false;
-      return;
-    }
-    if (weightRaw === "" && kcalRaw === "") {
-      errorEl.textContent = "Enter a weight, calories, or both.";
-      errorEl.hidden = false;
-      return;
-    }
-
-    const saveBtn = $("log-save-btn");
-    saveBtn.disabled = true;
-    saveBtn.textContent = "Saving…";
-    try {
-      const saved = await putEntry(date, {
-        weight_kg: weightRaw === "" ? null : toKg(Number(weightRaw), units()),
-        kcal: kcalRaw === "" ? null : Math.round(Number(kcalRaw)),
-      });
-      await refresh();
-      if (saved.warnings.length > 0) {
-        // Soft input guards: the entry IS saved — surface, don't block.
-        warningsEl.innerHTML = saved.warnings
-          .map((w) => `<span>Saved with a warning: ${escapeHtml(w)}</span>`)
-          .join("");
-        warningsEl.hidden = false;
-        saveBtn.disabled = false;
-        saveBtn.textContent = "Save entry";
-      } else {
-        this.close();
-      }
-    } catch (err) {
-      errorEl.textContent = `Couldn't save: ${err.message}`;
-      errorEl.hidden = false;
-      saveBtn.disabled = false;
-      saveBtn.textContent = "Save entry";
-    }
-  },
-};
-
-function escapeHtml(s) {
-  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-}
-
-function wireModal() {
-  modal.overlay = $("log-overlay");
-  modal.form = $("log-form");
-
-  $("open-log-btn").addEventListener("click", () => modal.open());
-  $("open-log-fab").addEventListener("click", () => modal.open());
-  $("log-close-btn").addEventListener("click", () => modal.close());
-  $("log-cancel-btn").addEventListener("click", () => modal.close());
-  $("log-date").addEventListener("change", (e) => modal.prefill(e.target.value));
-  modal.overlay.addEventListener("click", (e) => {
-    if (e.target === modal.overlay) modal.close();
-  });
-  document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && !modal.overlay.hidden) modal.close();
-  });
-  modal.form.addEventListener("submit", (e) => {
-    e.preventDefault();
-    modal.save();
-  });
+function wireLogButtons() {
+  // New entry: today's date, editable; refresh the dashboard after a save so the
+  // hero/chart/plateau recompute.
+  const open = () =>
+    openEntryForm({ date: todayIso(), units: units(), dateEditable: true, onSaved: refresh });
+  $("open-log-btn").addEventListener("click", open);
+  $("open-log-fab").addEventListener("click", open);
 }
 
 // ---------- load + render ---------- //
@@ -504,7 +404,7 @@ async function refresh() {
 }
 
 async function init() {
-  wireModal();
+  wireLogButtons();
   wireRangeButtons();
   wireChartTooltip();
 

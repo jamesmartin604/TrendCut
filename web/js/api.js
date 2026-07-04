@@ -67,3 +67,16 @@ export function putEntry(date, { weight_kg, kcal }) {
     body: JSON.stringify({ weight_kg, kcal }),
   }).then(asJson);
 }
+
+/** GET /entries — all entries (each has date, weight_kg, kcal, timestamps). */
+export function listEntries() {
+  return fetch("/entries").then(asJson);
+}
+
+/** DELETE /entries/{date} — permanently remove a day. Resolves on 204. */
+export async function deleteEntry(date) {
+  const res = await fetch(`/entries/${date}`, { method: "DELETE" });
+  if (!res.ok && res.status !== 204) {
+    throw new Error(`${res.status} ${res.statusText}`);
+  }
+}

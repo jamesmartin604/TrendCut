@@ -20,6 +20,7 @@
       <nav class="topnav" aria-label="Primary">
         <a class="topnav-link" href="/">Dashboard</a>
         <a class="topnav-link" href="/tdee.html">TDEE</a>
+        <a class="topnav-link" href="/history.html">History</a>
         <a class="topnav-link is-active" href="/settings.html" aria-current="page">Settings</a>
       </nav>
     </div>
@@ -115,6 +116,25 @@
         </button>
       </div>
     </form>
+
+    <!-- Data export / backup -->
+    <section class="settings-group">
+      <h2 class="settings-group-label">Backup</h2>
+      <div class="settings-card">
+        <div class="settings-row settings-row-stack">
+          <span class="settings-row-label">Export your data</span>
+          <p class="settings-hint">
+            Downloads all logged entries (date, weight, calories). Settings are not
+            included. Keep a copy somewhere safe — this is your backup.
+          </p>
+          <div class="export-actions">
+            <button class="btn btn-ghost" type="button" id="export-csv">Download CSV</button>
+            <button class="btn btn-ghost" type="button" id="export-json">Download JSON</button>
+          </div>
+          <div class="form-error" id="export-error" hidden></div>
+        </div>
+      </div>
+    </section>
   </main>
 </body>
 </html>

@@ -148,6 +148,34 @@ function escapeHtml(s) {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
+// ---------- export / backup ---------- //
+
+/**
+ * Download all entries via the existing GET /entries/export endpoint as a dated
+ * file. Fetches first (rather than a plain link) so a failure surfaces an inline
+ * message instead of navigating the browser to an error page.
+ */
+async function exportData(format) {
+  const errEl = $("export-error");
+  errEl.hidden = true;
+  try {
+    const res = await fetch(`/entries/export?format=${format}`);
+    if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `tdee-backup-${todayIso()}.${format}`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  } catch (err) {
+    errEl.textContent = `Export failed: ${err.message}. Try again.`;
+    errEl.hidden = false;
+  }
+}
+
 // ---------- wiring ---------- //
 
 function init() {
@@ -162,6 +190,8 @@ function init() {
     e.preventDefault();
     save();
   });
+  $("export-csv").addEventListener("click", () => exportData("csv"));
+  $("export-json").addEventListener("click", () => exportData("json"));
 
   load().catch((err) => {
     const el = $("page-error");
