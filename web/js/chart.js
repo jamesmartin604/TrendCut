@@ -34,9 +34,10 @@ const COLOR = {
  *
  * @param {HTMLElement} container sized box the SVG fills
  * @param {{points: {date: string, weight_kg: number|null, trend_kg: number|null}[],
- *          targetWeight: number|null}} data trend series (from /estimate) + target
+ *          targetWeight: number|null, unitLabel?: string}} data trend series (values
+ *          already in the display unit) + target + the unit label for annotations
  */
-export function renderWeightChart(container, { points, targetWeight }) {
+export function renderWeightChart(container, { points, targetWeight, unitLabel = "kg" }) {
   const hasWeight = points.some((p) => p.weight_kg != null || p.trend_kg != null);
   if (!hasWeight) {
     container.innerHTML =
@@ -97,7 +98,7 @@ export function renderWeightChart(container, { points, targetWeight }) {
     parts.push(
       `<line x1="${x0}" x2="${x1}" y1="${y}" y2="${y}" stroke="${COLOR.target}" ` +
         'stroke-width="1.5" stroke-dasharray="8 4" opacity="0.5"/>',
-      `<text class="chart-axis-label" x="${x0 + 4}" y="${y - 6}">${targetWeight} kg target</text>`,
+      `<text class="chart-axis-label" x="${x0 + 4}" y="${y - 6}">${round1(targetWeight)} ${unitLabel} target</text>`,
     );
   }
 

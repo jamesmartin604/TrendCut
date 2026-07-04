@@ -23,7 +23,7 @@ from fastapi.responses import JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 
 from api.csv_io import entries_to_csv, entries_to_json, parse_entries_csv
-from api.estimation import compute_estimate
+from api.estimation import compute_estimate, compute_tdee_history
 from api.guards import entry_warnings
 from api.models import (
     EntryResponse,
@@ -32,6 +32,7 @@ from api.models import (
     ImportResult,
     SettingsResponse,
     SettingsUpdate,
+    TdeeHistoryResponse,
 )
 from api.storage import Entry, Storage
 
@@ -141,6 +142,10 @@ def create_app(storage: Storage | None = None) -> FastAPI:
     @app.get("/estimate", response_model=EstimateResponse)
     def estimate(store: Storage = Depends(get_storage)) -> EstimateResponse:
         return compute_estimate(store.list_entries(), store.get_settings())
+
+    @app.get("/tdee-history", response_model=TdeeHistoryResponse)
+    def tdee_history(store: Storage = Depends(get_storage)) -> TdeeHistoryResponse:
+        return compute_tdee_history(store.list_entries(), store.get_settings())
 
     # --- health ------------------------------------------------------------- #
     # Liveness probe for the deploy platform (Fly). Trivial 200 + JSON; touches no

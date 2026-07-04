@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TrendCut · Settings</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+    rel="stylesheet"
+  />
+  <link rel="stylesheet" href="/css/app.css" />
+  <script type="module" src="/js/settings.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <span class="brand">TrendCut</span>
+      <nav class="topnav" aria-label="Primary">
+        <a class="topnav-link" href="/">Dashboard</a>
+        <a class="topnav-link" href="/tdee.html">TDEE</a>
+        <a class="topnav-link is-active" href="/settings.html" aria-current="page">Settings</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="page">
+    <div class="page-error" id="page-error" hidden></div>
+
+    <header class="page-head">
+      <h1 class="page-title">Settings</h1>
+      <p class="page-subtitle">Your target and the knobs that drive the estimate.</p>
+    </header>
+
+    <form id="settings-form">
+      <!-- Group 1: goal -->
+      <section class="settings-group">
+        <h2 class="settings-group-label">Goal</h2>
+        <div class="settings-card">
+          <div class="settings-row">
+            <span class="settings-row-label">Display units</span>
+            <div class="segmented" role="group" aria-label="Display units">
+              <button class="segment is-active" type="button" data-units="kg">kg</button>
+              <button class="segment" type="button" data-units="lb">lb</button>
+            </div>
+          </div>
+          <div class="settings-row">
+            <label class="settings-row-label" for="target-weight">Target weight</label>
+            <div class="settings-input-inline">
+              <input
+                class="settings-number"
+                id="target-weight"
+                type="number"
+                inputmode="decimal"
+                step="0.1"
+                placeholder="—"
+              />
+              <span class="unit-mono" id="target-weight-unit">kg</span>
+            </div>
+          </div>
+          <div class="settings-row">
+            <label class="settings-row-label" for="target-date">Target date</label>
+            <input class="settings-date" id="target-date" type="date" />
+          </div>
+        </div>
+      </section>
+
+      <!-- Group 2: algorithm -->
+      <section class="settings-group">
+        <h2 class="settings-group-label">Algorithm calibration</h2>
+        <div class="settings-card">
+          <div class="settings-row settings-row-stack">
+            <div class="settings-row-head">
+              <span class="settings-row-label">Smoothing (α)</span>
+              <span class="settings-readout" id="alpha-readout">0.10</span>
+            </div>
+            <input
+              class="slider"
+              id="alpha-slider"
+              type="range"
+              min="0.02"
+              max="0.40"
+              step="0.01"
+              value="0.10"
+            />
+            <div class="slider-ends">
+              <span>Smoother</span>
+              <span id="alpha-window">≈10-day window</span>
+              <span>Reactive</span>
+            </div>
+          </div>
+          <div class="settings-row settings-row-stack">
+            <span class="settings-row-label">Regression window</span>
+            <div class="segmented segmented-wide" role="group" aria-label="Regression window">
+              <button class="segment" type="button" data-window="14">14 days</button>
+              <button class="segment" type="button" data-window="21">21 days</button>
+              <button class="segment" type="button" data-window="28">28 days</button>
+            </div>
+            <p class="settings-hint">
+              A longer window filters out short-term water swings for a steadier TDEE, but
+              lags real changes; a shorter one reacts faster but is noisier.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <div class="form-warnings" id="settings-warnings" hidden></div>
+      <div class="form-error" id="settings-error" hidden></div>
+
+      <div class="settings-actions">
+        <span class="settings-saved" id="settings-saved" hidden>Saved ✓</span>
+        <button class="btn btn-primary btn-wide" id="settings-save-btn" type="submit">
+          Save settings
+        </button>
+      </div>
+    </form>
+  </main>
+</body>
+</html>

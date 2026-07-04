@@ -18,6 +18,11 @@
   <header class="topbar">
     <div class="topbar-inner">
       <span class="brand">TrendCut</span>
+      <nav class="topnav" aria-label="Primary">
+        <a class="topnav-link is-active" href="/" aria-current="page">Dashboard</a>
+        <a class="topnav-link" href="/tdee.html">TDEE</a>
+        <a class="topnav-link" href="/settings.html">Settings</a>
+      </nav>
       <button class="btn btn-primary" id="open-log-btn" type="button">Log entry</button>
     </div>
   </header>
@@ -135,7 +140,7 @@
                 step="0.1"
                 placeholder="00.0"
               />
-              <span class="unit-mono">kg</span>
+              <span class="unit-mono" id="log-weight-unit">kg</span>
             </div>
           </div>
           <div class="field">

@@ -22,9 +22,30 @@ export function getEstimate() {
   return fetch("/estimate").then(asJson);
 }
 
+/**
+ * GET /tdee-history — rolling TDEE estimate recomputed as-of each past day. Each
+ * point carries its own `status`; `tdee`/`ci_*` are null on insufficient_data days.
+ */
+export function getTdeeHistory() {
+  return fetch("/tdee-history").then(asJson);
+}
+
 /** GET /settings — estimator knobs + target weight/date. */
 export function getSettings() {
   return fetch("/settings").then(asJson);
+}
+
+/**
+ * PUT /settings — partial update of the estimator/plan knobs (α, window, target
+ * weight/date, units, …). Only the keys present are changed. Returns the full
+ * settings after the update.
+ */
+export function updateSettings(patch) {
+  return fetch("/settings", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(patch),
+  }).then(asJson);
 }
 
 /** GET /entries/{date} — the entry for a day, or null if none exists. */

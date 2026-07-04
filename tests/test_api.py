@@ -176,6 +176,46 @@ def test_estimate_real_on_sufficient_data(client: TestClient) -> None:
     assert body["plateau"]["state"] in {"on_track", "slowing", "stalled"}
 
 
+def test_tdee_history_empty_db(client: TestClient) -> None:
+    body = client.get("/tdee-history").json()
+    assert set(body) >= {"window_days", "alpha", "energy_density", "points"}
+    assert body["points"] == []
+
+
+def test_tdee_history_shape_and_honest_ramp(client: TestClient) -> None:
+    _seed_sufficient(client, n_days=50)
+    body = client.get("/tdee-history").json()
+    points = body["points"]
+    # One point per calendar day in the series.
+    assert len(points) == 50
+    # Every point carries a status; each has the date/tdee/ci keys.
+    for p in points:
+        assert set(p) == {"date", "status", "tdee", "ci_low", "ci_high"}
+        assert p["status"] in {"ok", "low_confidence", "insufficient_data"}
+
+    # Early days can't support an estimate -> honest insufficient_data, tdee None.
+    assert points[0]["status"] == "insufficient_data"
+    assert points[0]["tdee"] is None
+
+    # By the end there's a real, bounded estimate.
+    last = points[-1]
+    assert last["status"] in {"ok", "low_confidence"}
+    assert last["tdee"] is not None
+    assert last["ci_low"] <= last["tdee"] <= last["ci_high"]
+
+    # No point ever fabricates a number while declaring insufficient_data.
+    for p in points:
+        if p["status"] == "insufficient_data":
+            assert p["tdee"] is None
+
+
+def test_tdee_history_respects_settings_window(client: TestClient) -> None:
+    _seed_sufficient(client, n_days=50)
+    client.put("/settings", json={"window_days": 21})
+    body = client.get("/tdee-history").json()
+    assert body["window_days"] == 21
+
+
 def test_estimate_respects_updated_window(client: TestClient) -> None:
     _seed_sufficient(client, n_days=40)
     client.put("/settings", json={"window_days": 21, "alpha": 0.15})

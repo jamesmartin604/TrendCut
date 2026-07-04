@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TrendCut · TDEE over time</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+    rel="stylesheet"
+  />
+  <link rel="stylesheet" href="/css/app.css" />
+  <script type="module" src="/js/tdee.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <span class="brand">TrendCut</span>
+      <nav class="topnav" aria-label="Primary">
+        <a class="topnav-link" href="/">Dashboard</a>
+        <a class="topnav-link is-active" href="/tdee.html" aria-current="page">TDEE</a>
+        <a class="topnav-link" href="/settings.html">Settings</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="page">
+    <div class="page-error" id="page-error" hidden></div>
+
+    <header class="page-head tdee-head">
+      <div>
+        <h1 class="page-title">TDEE over time</h1>
+        <p class="page-subtitle">
+          How your estimated maintenance has drifted — the signature of adaptive
+          thermogenesis as your body adjusts to a deficit.
+        </p>
+      </div>
+      <span class="chip chip-drift" id="drift-chip" hidden></span>
+    </header>
+
+    <section class="card chart-card">
+      <div class="chart-header">
+        <div>
+          <span class="card-label">Rolling estimate</span>
+          <h2 class="chart-title">Metabolic trend</h2>
+        </div>
+        <div class="tdee-current" id="tdee-current" hidden>
+          <span class="card-label">Current</span>
+          <span class="tdee-current-value"><span id="current-value">–</span><span class="unit-mono"> kcal</span></span>
+        </div>
+      </div>
+      <div class="chart-area chart-area-tall" id="tdee-chart"></div>
+      <p class="chart-legend">
+        <span class="legend-item"><span class="legend-swatch legend-line"></span>rolling TDEE</span>
+        <span class="legend-item"><span class="legend-swatch legend-band"></span>95% CI (wider = less certain)</span>
+        <span class="legend-item"><span class="legend-swatch legend-lowconf"></span>low-confidence day</span>
+        <span class="legend-item legend-gap">gaps = not enough data yet</span>
+      </p>
+    </section>
+
+    <section class="metrics-grid tdee-metrics">
+      <article class="card metric-card">
+        <header class="card-label">Baseline</header>
+        <p class="metric-value"><span id="baseline-value">–</span><span class="unit-mono" id="baseline-unit" hidden> kcal</span></p>
+        <p class="metric-note" id="baseline-note">First confident estimate</p>
+      </article>
+      <article class="card metric-card">
+        <header class="card-label">Net drift</header>
+        <p class="metric-value"><span id="drift-value">–</span><span class="unit-mono" id="drift-unit" hidden> kcal</span></p>
+        <p class="metric-note" id="drift-note">Since the baseline</p>
+      </article>
+    </section>
+  </main>
+</body>
+</html>

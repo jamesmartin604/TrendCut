@@ -18,13 +18,20 @@ import math
 
 import numpy as np
 
-from api.models import EstimateResponse, PlateauResult, TdeeResult, TrendPoint
+from api.models import (
+    EstimateResponse,
+    PlateauResult,
+    TdeeHistoryPoint,
+    TdeeHistoryResponse,
+    TdeeResult,
+    TrendPoint,
+)
 from api.storage import Entry, Settings
 from estimator.plateau import classify_plateau
 from estimator.smoothing import ewma_trend
 from estimator.tdee import estimate_tdee
 
-__all__ = ["compute_estimate", "entries_to_series"]
+__all__ = ["compute_estimate", "compute_tdee_history", "entries_to_series"]
 
 
 def entries_to_series(
@@ -112,4 +119,49 @@ def compute_estimate(entries: list[Entry], settings: Settings) -> EstimateRespon
             expected_deficit_kcal=verdict.expected_deficit_kcal,
             based_on_status=verdict.based_on_status,
         ),
+    )
+
+
+def compute_tdee_history(entries: list[Entry], settings: Settings) -> TdeeHistoryResponse:
+    """Recompute the rolling TDEE estimate *as of* each past day.
+
+    For every calendar day in the series, the estimator is run on only the data up
+    to and including that day (a truncated prefix), reproducing what the estimate
+    would have been on that date. The result is the drift of the rolling estimate
+    over time — the visual signature of adaptive thermogenesis (PRD FR-21).
+
+    Like :func:`compute_estimate`, this stores nothing and recomputes from raw
+    entries. Each point carries the estimator's own ``status``, so early days honestly
+    surface as ``insufficient_data`` (``tdee`` is ``None``) rather than a fabricated
+    number — the frontend breaks the line across those gaps.
+
+    Cost is ``O(n_days)`` estimator calls; for a single user's history that is a few
+    hundred cheap calls, well under a second.
+    """
+    dates, weight, intake = entries_to_series(entries)
+
+    points: list[TdeeHistoryPoint] = []
+    for i in range(len(dates)):
+        est = estimate_tdee(
+            weight[: i + 1],
+            intake[: i + 1],
+            window_days=settings.window_days,
+            alpha=settings.alpha,
+            assumed_energy_density=settings.energy_density,
+        )
+        points.append(
+            TdeeHistoryPoint(
+                date=dates[i].isoformat(),
+                status=est.status,
+                tdee=est.tdee,
+                ci_low=est.ci_low,
+                ci_high=est.ci_high,
+            )
+        )
+
+    return TdeeHistoryResponse(
+        window_days=settings.window_days,
+        alpha=settings.alpha,
+        energy_density=settings.energy_density,
+        points=points,
     )

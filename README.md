@@ -7,11 +7,13 @@ plateau has set in versus when you're just looking at water weight. The estimati
 logic is deterministic and mathematically defined, which makes it unusually easy to
 test — see [`PRD.md`](PRD.md) for the full design.
 
-> **Status:** Phase 7 — the estimation core, the thin API, and the first frontend
-> screens are complete. A static dashboard (hand-rolled HTML/CSS/vanilla JS, no
-> frameworks, no charting library) renders the TDEE hero with its confidence range,
-> a from-scratch SVG weight-trend chart, the graded plateau status, and a pace
-> readout, plus a log-entry modal — all served by the API itself. See
+> **Status:** v1 complete — the estimation core, the thin API, a deployed
+> container, and all four frontend screens are done. The static app (hand-rolled
+> HTML/CSS/vanilla JS, no frameworks, no charting library) has a **Dashboard** (TDEE
+> hero + from-scratch SVG weight chart + plateau status + pace/projection), a
+> **Log Entry** modal, a **Settings** screen (target, smoothing α, regression
+> window, kg/lb units), and a **TDEE-over-time** screen (a second hand-rolled chart
+> of the rolling estimate's drift — the adaptive-thermogenesis proof). See
 > [Running the app](#running-the-app) below. The estimation core:
 > the synthetic
 > ground-truth generator (`estimator/synthetic.py`), the gap-aware EWMA trend
@@ -102,6 +104,16 @@ Then open **http://127.0.0.1:8000/** in a browser for the dashboard:
   calorie-only days). Soft input-guard warnings from the API are shown inline
   without blocking the save; picking a date with an existing entry prefills it for
   editing.
+* **Settings** (`/settings.html`) — target weight/date, smoothing strength (α),
+  regression window (14/21/28 days), and display units (kg/lb). Saving persists via
+  `PUT /settings`; the Dashboard's projection and the estimator's window/α then
+  reflect the new values. Units are a display preference only — data is always
+  stored in kg and converted at the presentation layer.
+* **TDEE over time** (`/tdee.html`) — a second hand-rolled chart of the rolling TDEE
+  estimate recomputed as-of each past day (`GET /tdee-history`), showing how
+  maintenance drifts down as the body adapts. It honestly breaks the line across
+  `insufficient_data` stretches and widens the confidence band on low-confidence
+  days rather than drawing a confident line through them.
 
 The API serves on `http://127.0.0.1:8000` and writes to `./trendcut.db` by default;
 override the DB path with the `TRENDCUT_DB` environment variable. Interactive API
@@ -117,6 +129,7 @@ Key endpoints:
 | `DELETE /entries/{date}` | Delete a day                                                    |
 | `GET /settings` / `PUT /settings` | Read / partially update α, window, energy density, target, units |
 | `GET /estimate`          | Recompute trend + TDEE (point, CI, status) + plateau verdict   |
+| `GET /tdee-history`      | Rolling TDEE estimate recomputed as-of each past day (drift series) |
 | `POST /entries/import`   | Bulk-upsert a CSV body (see format below)                      |
 | `GET /entries/export?format=csv\|json` | Dump all entries                                 |
 

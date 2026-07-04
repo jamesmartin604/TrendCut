@@ -10,6 +10,7 @@
 
 import { getEntry, getEstimate, getSettings, putEntry } from "./api.js";
 import { renderWeightChart } from "./chart.js";
+import { formatWeight, fromKg, toKg, unitLabel } from "./units.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -19,10 +20,12 @@ const state = {
   range: "30", // chart range in days, or "all"
 };
 
+// Display unit preference (stored data stays kg; this only affects presentation).
+const units = () => (state.settings?.units === "lb" ? "lb" : "kg");
+
 // ---------- formatting helpers ---------- //
 
 const fmtInt = (v) => Math.round(v).toLocaleString("en-US");
-const fmtKg = (v) => `${(Math.round(v * 10) / 10).toFixed(1)}`;
 
 function fmtDateHuman(date) {
   return date.toLocaleString("en", { month: "short", day: "numeric", timeZone: "UTC" });
@@ -130,26 +133,30 @@ function renderPace() {
   const frac = expected > 0 ? Math.max(0, Math.min(deficit / expected, 1)) : 0;
   bar.style.width = `${Math.round(frac * 100)}%`;
 
+  const u = units();
   const weeklyKg = tdee.slope_kg_per_day * 7;
-  rate.textContent = `${weeklyKg >= 0 ? "+" : "−"}${fmtKg(Math.abs(weeklyKg))} kg/week`;
+  const weeklyDisp = Math.abs(fromKg(weeklyKg, u));
+  rate.textContent = `${weeklyKg >= 0 ? "+" : "−"}${weeklyDisp.toFixed(1)} ${unitLabel(u)}/week`;
 
   // On-pace-for-target line — simple arithmetic on the estimator's slope; this
-  // projects, it never invents an estimate.
+  // projects, it never invents an estimate. Projection math stays in kg; only the
+  // displayed target converts to the chosen unit.
   const target = settings.target_weight;
   const last = lastTrendPoint();
   if (target == null || last == null) {
     chipText.textContent = "No target set.";
     return;
   }
+  const tgt = `${formatWeight(target, u)} ${unitLabel(u)}`;
   const remaining = last.trend_kg - target;
   if (remaining <= 0) {
     chip.classList.add("is-ontrack");
-    chipText.textContent = `Target ${fmtKg(target)} kg reached.`;
+    chipText.textContent = `Target ${tgt} reached.`;
     return;
   }
   if (tdee.slope_kg_per_day >= 0) {
     chip.classList.add("is-behind");
-    chipText.textContent = `Trend isn't moving toward ${fmtKg(target)} kg right now.`;
+    chipText.textContent = `Trend isn't moving toward ${tgt} right now.`;
     return;
   }
   const daysToTarget = Math.ceil(remaining / -tdee.slope_kg_per_day);
@@ -159,15 +166,15 @@ function renderPace() {
     const wanted = new Date(`${settings.target_date}T00:00:00Z`);
     if (arrival <= wanted) {
       chip.classList.add("is-ontrack");
-      chipText.textContent = `On pace for ${fmtKg(target)} kg by ${arrivalText}.`;
+      chipText.textContent = `On pace for ${tgt} by ${arrivalText}.`;
     } else {
       chip.classList.add("is-behind");
       chipText.textContent =
-        `Projected ${fmtKg(target)} kg by ${arrivalText} — after your ` +
+        `Projected ${tgt} by ${arrivalText} — after your ` +
         `${fmtDateHuman(wanted)} target.`;
     }
   } else {
-    chipText.textContent = `Projected to reach ${fmtKg(target)} kg by ${arrivalText}.`;
+    chipText.textContent = `Projected to reach ${tgt} by ${arrivalText}.`;
   }
 }
 
@@ -178,7 +185,8 @@ function renderMetrics() {
   const last = lastTrendPoint();
 
   if (last != null) {
-    $("trend-weight").textContent = fmtKg(last.trend_kg);
+    $("trend-weight").textContent = formatWeight(last.trend_kg, units());
+    $("trend-weight-unit").textContent = ` ${unitLabel(units())}`;
     $("trend-weight-unit").hidden = false;
     $("trend-weight-note").textContent = `Smoothed as of ${fmtDateHuman(
       new Date(`${last.date}T00:00:00Z`),
@@ -209,9 +217,18 @@ function chartPoints() {
 }
 
 function renderChart() {
+  const u = units();
+  // Convert the kg series into the display unit before drawing; the chart math is
+  // unit-agnostic, so this is the only place units enter the chart.
+  const disp = chartPoints().map((p) => ({
+    date: p.date,
+    weight_kg: fromKg(p.weight_kg, u),
+    trend_kg: fromKg(p.trend_kg, u),
+  }));
   renderWeightChart($("chart"), {
-    points: chartPoints(),
-    targetWeight: state.settings.target_weight,
+    points: disp,
+    targetWeight: fromKg(state.settings.target_weight, u),
+    unitLabel: unitLabel(u),
   });
   $("chart-subtitle").textContent =
     state.range === "all" ? "All logged days" : `Last ${state.range} days`;
@@ -241,6 +258,7 @@ const modal = {
     $("log-warnings").hidden = true;
     $("log-save-btn").disabled = false;
     $("log-save-btn").textContent = "Save entry";
+    $("log-weight-unit").textContent = unitLabel(units());
     $("log-date").value = todayIso();
     $("log-weight").value = "";
     $("log-kcal").value = "";
@@ -258,7 +276,8 @@ const modal = {
       const entry = await getEntry(date);
       // Only apply if the user hasn't switched dates while we fetched.
       if ($("log-date").value !== date) return;
-      $("log-weight").value = entry?.weight_kg ?? "";
+      $("log-weight").value =
+        entry?.weight_kg == null ? "" : formatWeight(entry.weight_kg, units());
       $("log-kcal").value = entry?.kcal ?? "";
     } catch {
       /* prefill is best-effort; saving still works */
@@ -290,7 +309,7 @@ const modal = {
     saveBtn.textContent = "Saving…";
     try {
       const saved = await putEntry(date, {
-        weight_kg: weightRaw === "" ? null : Number(weightRaw),
+        weight_kg: weightRaw === "" ? null : toKg(Number(weightRaw), units()),
         kcal: kcalRaw === "" ? null : Math.round(Number(kcalRaw)),
       });
       await refresh();

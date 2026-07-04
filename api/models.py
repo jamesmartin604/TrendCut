@@ -12,6 +12,8 @@ __all__ = [
     "PlateauResult",
     "SettingsResponse",
     "SettingsUpdate",
+    "TdeeHistoryPoint",
+    "TdeeHistoryResponse",
     "TdeeResult",
     "TrendPoint",
 ]
@@ -97,3 +99,22 @@ class EstimateResponse(BaseModel):
     trend: list[TrendPoint]
     tdee: TdeeResult
     plateau: PlateauResult
+
+
+class TdeeHistoryPoint(BaseModel):
+    """One as-of-day rolling TDEE estimate. ``tdee``/``ci_*`` are ``None`` when the
+    estimator returned ``insufficient_data`` for the window ending on ``date``;
+    ``status`` always carries the estimator's honest verdict for that day."""
+
+    date: str
+    status: str
+    tdee: float | None
+    ci_low: float | None
+    ci_high: float | None
+
+
+class TdeeHistoryResponse(BaseModel):
+    window_days: int
+    alpha: float
+    energy_density: float
+    points: list[TdeeHistoryPoint]
