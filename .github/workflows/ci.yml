@@ -27,3 +27,26 @@ jobs:
 
       - name: Test (pytest)
         run: pytest
+
+  # Deploy runs ONLY on a push to main, and ONLY after lint-and-test succeeds
+  # (`needs:` makes a red lint/test result block the deploy entirely). Pull
+  # requests and pushes to other branches still run lint-and-test above but never
+  # reach this job.
+  deploy:
+    needs: lint-and-test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    concurrency: deploy-main  # never run two deploys at once
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up flyctl
+        uses: superfly/flyctl-actions/setup-flyctl@master
+
+      # FLY_API_TOKEN is a repository secret you populate in the GitHub UI
+      # (Settings -> Secrets and variables -> Actions). Generate it with
+      # `fly tokens create deploy`. It is never committed to the repo.
+      - name: Deploy to Fly.io
+        run: flyctl deploy --remote-only
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}

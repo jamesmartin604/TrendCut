@@ -1,0 +1,53 @@
+# Fly.io configuration for TrendCut.
+#
+# NOTE: `app` must be a globally-unique name you own. Either edit it here before
+# the first deploy, or run `fly launch --no-deploy` to have Fly set it (and create
+# the app) for you. `primary_region` is the datacenter to run in — change it to the
+# code nearest you (e.g. lhr=London, iad=US-East, fra=Frankfurt, syd=Sydney).
+#
+# There are no secrets in this file (there must never be — deploy auth is the
+# FLY_API_TOKEN CI secret, not anything committed here).
+app = "trendcut-jamesmartin"
+primary_region = "lhr"
+
+[build]
+
+# Non-secret runtime configuration. The DB path points at the mounted volume; HOST
+# and PORT are read by the container's start command (see Dockerfile CMD).
+[env]
+  TRENDCUT_DB = "/data/trendcut.db"
+  HOST = "0.0.0.0"
+  PORT = "8080"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  # Cost saver: stop the single machine when idle, start it on the next request.
+  # The volume (your data) persists while the machine is stopped.
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+  # Liveness check wired to the app's GET /health (added in api/app.py).
+  [[http_service.checks]]
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "10s"
+    method = "GET"
+    path = "/health"
+
+# Persistent SQLite storage. This volume lives OUTSIDE the container filesystem and
+# outlives image rebuilds/redeploys — a deploy swaps the machine's image but keeps
+# the volume, so your logged data is never wiped. Create it once with:
+#   fly volumes create trendcut_data --size 1 --region <your-region>
+# A volume binds to ONE machine, which is exactly what single-writer SQLite needs.
+[[mounts]]
+  source = "trendcut_data"
+  destination = "/data"
+
+# Single small machine. Keep the count at 1 (`fly scale count 1`): SQLite is a
+# single-writer file, so a second machine writing to it would corrupt the data.
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"
+  cpus = 1

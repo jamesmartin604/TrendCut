@@ -142,6 +142,13 @@ def create_app(storage: Storage | None = None) -> FastAPI:
     def estimate(store: Storage = Depends(get_storage)) -> EstimateResponse:
         return compute_estimate(store.list_entries(), store.get_settings())
 
+    # --- health ------------------------------------------------------------- #
+    # Liveness probe for the deploy platform (Fly). Trivial 200 + JSON; touches no
+    # storage so it stays green even on an empty/fresh volume.
+    @app.get("/health")
+    def health() -> dict[str, bool]:
+        return {"ok": True}
+
     # --- frontend ----------------------------------------------------------- #
     # Static mount only (no business logic). Mounted last so the API routes above
     # always match first; `html=True` serves web/index.html at "/".

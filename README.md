@@ -161,3 +161,87 @@ date,weight_kg,kcal
 
 `GET /entries/export?format=csv` writes the canonical `date,weight_kg,kcal` columns
 back out, so an export round-trips cleanly through import.
+
+## Configuration (environment variables)
+
+Every knob has a sensible default, so the app runs with no configuration at all.
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `TRENDCUT_DB` | `trendcut.db` | Path to the SQLite file. In the container this is `/data/trendcut.db`, on the mounted volume. |
+| `HOST` | `0.0.0.0` | Interface uvicorn binds (used by the container start command). |
+| `PORT` | `8080` | Port uvicorn binds (matches Fly's `internal_port`). |
+
+(Estimator/plan knobs — α, window, energy density, target, units — are **not** env
+vars; they live in the `settings` table and are edited via `PUT /settings`.)
+
+## Deployment (Fly.io)
+
+The app ships as a small container (see [`Dockerfile`](Dockerfile)) running uvicorn
+and serving the API + static frontend same-origin. It deploys to
+[Fly.io](https://fly.io) with the SQLite database on a **persistent volume** that
+outlives redeploys.
+
+### One-time setup
+
+1. Install [flyctl](https://fly.io/docs/flyctl/install/) and `fly auth login`.
+2. Pick a unique app name and your nearest region, then edit `app` and
+   `primary_region` in [`fly.toml`](fly.toml) (or run `fly launch --no-deploy` to
+   have Fly fill them in — keep the existing `[[mounts]]` and `[http_service]`).
+3. Create the persistent volume (once) in the same region:
+   ```bash
+   fly volumes create trendcut_data --size 1 --region <your-region>
+   ```
+   This 1 GB volume holds `trendcut.db`. It is **not** part of the image, so
+   rebuilding/redeploying the app never touches it.
+4. Keep it to a single machine — SQLite is single-writer:
+   ```bash
+   fly scale count 1
+   ```
+
+### CI secret you must set
+
+The deploy job in [`.github/workflows/ci.yml`](.github/workflows/ci.yml) needs one
+GitHub Actions secret, which **you** populate (nothing secret is committed):
+
+| Secret name | How to create it |
+|-------------|------------------|
+| `FLY_API_TOKEN` | `fly tokens create deploy` — copy the output into GitHub → *Settings → Secrets and variables → Actions → New repository secret*. |
+
+### How deploys run
+
+* Every push and PR runs **lint + test** (`lint-and-test` job).
+* The **`deploy` job runs only on a push to `main`, and only after `lint-and-test`
+  passes** (`needs: lint-and-test`). A failing test blocks the deploy; PRs and
+  non-`main` branches never deploy.
+* On a green `main` push, CI runs `flyctl deploy --remote-only`, which builds the
+  image on Fly and rolls the machine over to it. The volume — and your data —
+  stays put. Fly health-checks `GET /health` before sending traffic.
+
+You can also deploy by hand at any time with `fly deploy`.
+
+### Backups and restore
+
+Your logged data is the thing that matters, so keep copies. Two levels:
+
+**Logical (recommended, human-readable).** The app's own export is the simplest
+backup — run it on a schedule and keep the files:
+```bash
+curl https://<your-app>.fly.dev/entries/export?format=csv  > backup-$(date +%F).csv
+# restore into any instance:
+curl -X POST --data-binary @backup-2026-07-04.csv https://<your-app>.fly.dev/entries/import
+```
+Because import upserts by date, restoring is idempotent.
+
+**Full database file.** For a byte-exact copy, snapshot the SQLite file over SSH
+(`.backup` takes a consistent copy of a live DB):
+```bash
+fly ssh console -C "sqlite3 /data/trendcut.db \".backup '/data/backup.db'\""
+fly ssh sftp get /data/backup.db ./trendcut-$(date +%F).db
+# restore: push a .db back and restart
+fly ssh sftp shell   # -> put ./trendcut-2026-07-04.db /data/trendcut.db
+fly apps restart <your-app>
+```
+Fly also snapshots volumes automatically (retention configurable via
+`fly volumes snapshots`), but app-level exports are your portable, host-independent
+safety net.

@@ -53,6 +53,13 @@ def _seed_sufficient(client: TestClient, *, n_days: int = 40) -> list[str]:
     return dates
 
 
+# --- health --------------------------------------------------------------- #
+def test_health_returns_ok(client: TestClient) -> None:
+    r = client.get("/health")
+    assert r.status_code == 200
+    assert r.json() == {"ok": True}
+
+
 # --- entry CRUD ----------------------------------------------------------- #
 def test_entry_crud_roundtrip(client: TestClient) -> None:
     r = client.put("/entries/2026-01-01", json={"weight_kg": 80.0, "kcal": 2000})

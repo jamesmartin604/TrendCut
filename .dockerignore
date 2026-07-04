@@ -1,0 +1,38 @@
+# Keep the build context tiny and the image clean. Nothing here belongs in the
+# runtime image.
+.git/
+.github/
+.venv/
+venv/
+env/
+
+__pycache__/
+*.py[cod]
+*$py.class
+
+.pytest_cache/
+.ruff_cache/
+.hypothesis/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Tests and local demos are not part of the runtime app.
+tests/
+examples/
+
+# Local data — never bake a database into the image.
+*.sqlite
+*.sqlite3
+*.db
+my_log.csv
+
+# Design references and docs not needed at runtime.
+design/
+PRD.md
+
+# Editor / OS cruft
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
