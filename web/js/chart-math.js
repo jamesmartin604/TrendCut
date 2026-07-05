@@ -147,6 +147,78 @@ export function weekStartIndices(isoDates) {
   return out;
 }
 
+/**
+ * Whole calendar days between two ISO dates, computed as `toIso − fromIso`
+ * (negative when `toIso` precedes `fromIso`). Both are "YYYY-MM-DD"; the maths is
+ * done at UTC midnight so daylight-saving shifts never bend the day count.
+ */
+export function daysBetween(fromIso, toIso) {
+  const ms = new Date(`${toIso}T00:00:00Z`) - new Date(`${fromIso}T00:00:00Z`);
+  return Math.round(ms / 86400000);
+}
+
+/**
+ * The goal (plan) line's two anchor points, expressed on the weight chart's
+ * day-index axis: index 0 is `displayStartIso` and each unit is one calendar day,
+ * matching the evenly-spaced point axis the chart already draws on.
+ *
+ *   start = (first logged day, its smoothed TREND weight) — where the plan began
+ *   end   = (target date, target weight)                  — where the plan aims
+ *
+ * `startX` is ≤ 0 whenever the first logged day precedes the visible window (the
+ * line then enters from the left edge); `endX` can exceed the last data index (the
+ * plan reaches into the future) or be small/negative (a target already in the past).
+ * Returns `null` if any anchor input is missing — the caller then draws no line, so
+ * a nonexistent target is never invented.
+ */
+export function goalLineAnchors({
+  displayStartIso,
+  firstLoggedIso,
+  startWeight,
+  targetIso,
+  targetWeight,
+}) {
+  if (
+    firstLoggedIso == null ||
+    startWeight == null ||
+    targetIso == null ||
+    targetWeight == null
+  ) {
+    return null;
+  }
+  return {
+    startX: daysBetween(displayStartIso, firstLoggedIso),
+    startWeight,
+    endX: daysBetween(displayStartIso, targetIso),
+    endWeight: targetWeight,
+  };
+}
+
+/**
+ * Weight of the goal line at day-index `x`, by linear interpolation along the plan
+ * (the same slope extrapolates outside the anchors). A degenerate plan whose start
+ * and end fall on the same day returns the start weight.
+ */
+export function goalWeightAt({ startX, startWeight, endX, endWeight }, x) {
+  const span = endX - startX;
+  if (span === 0) return startWeight;
+  return startWeight + ((x - startX) / span) * (endWeight - startWeight);
+}
+
+/**
+ * The [lo, hi] day-index domain for the weight chart. Normally it frames the `n`
+ * data points as `[0, n-1]`. When `anchors` are given and the plan's target lies
+ * beyond the last point, the upper bound stretches to `endX` so the goal line is
+ * visible all the way to the target date; a past/near target never shrinks the
+ * data framing. The lower bound stays at 0 (framed to the data), so hiding the goal
+ * line returns the chart to its normal domain with no extend/reframe needed.
+ */
+export function indexDomain(n, anchors = null) {
+  let hi = Math.max(n - 1, 1);
+  if (anchors != null) hi = Math.max(hi, anchors.endX);
+  return [0, hi];
+}
+
 /** "2026-06-01" → "JUN 1" (short, uppercase axis label). */
 export function formatDayLabel(iso) {
   const d = new Date(`${iso}T00:00:00Z`);

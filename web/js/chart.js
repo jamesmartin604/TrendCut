@@ -10,6 +10,8 @@
 import {
   extent,
   formatDayLabel,
+  goalWeightAt,
+  indexDomain,
   linearScale,
   linePath,
   padDomain,
@@ -27,6 +29,7 @@ const COLOR = {
   grid: "#f3f3f3",
   gridBase: "#e5e5e5",
   target: "#727785",
+  goal: "#006c49", // plan/goal line (token: secondary green) — a quiet reference
 };
 
 /**
@@ -34,10 +37,16 @@ const COLOR = {
  *
  * @param {HTMLElement} container sized box the SVG fills
  * @param {{points: {date: string, weight_kg: number|null, trend_kg: number|null}[],
- *          targetWeight: number|null, unitLabel?: string}} data trend series (values
- *          already in the display unit) + target + the unit label for annotations
+ *          targetWeight: number|null, unitLabel?: string,
+ *          goal?: {startX: number, startWeight: number, endX: number, endWeight: number}|null,
+ *          goalTargetIso?: string|null}} data trend series (values already in the
+ *          display unit) + the horizontal target + the optional goal-line anchors
+ *          (day-index axis, display units) and the target-date label for its x-tick
  */
-export function renderWeightChart(container, { points, targetWeight, unitLabel = "kg" }) {
+export function renderWeightChart(
+  container,
+  { points, targetWeight, unitLabel = "kg", goal = null, goalTargetIso = null },
+) {
   const hasWeight = points.some((p) => p.weight_kg != null || p.trend_kg != null);
   if (!hasWeight) {
     container.innerHTML =
@@ -55,13 +64,25 @@ export function renderWeightChart(container, { points, targetWeight, unitLabel =
   const y1 = height - MARGIN.bottom;
 
   // --- scales (pure math) ------------------------------------------------- #
+  // x-domain frames the data points, but stretches to the target date when the goal
+  // line reaches into the future (indexDomain); hiding the line reframes to the data.
+  const [xDomLo, xDomHi] = indexDomain(points.length, goal);
+  // The goal line's visible span on the extended axis — its endpoints join the
+  // y-domain so the plan can't run off the top/bottom of the plot.
+  const goalXa = goal ? Math.max(goal.startX, xDomLo) : 0;
+  const goalXb = goal ? Math.min(goal.endX, xDomHi) : 0;
+  const goalVisible = goal != null && goal.endX !== goal.startX && goalXb >= goalXa;
+
   const values = [];
   for (const p of points) {
     values.push(p.weight_kg, p.trend_kg);
   }
   if (targetWeight != null) values.push(targetWeight);
+  if (goalVisible) {
+    values.push(goalWeightAt(goal, goalXa), goalWeightAt(goal, goalXb));
+  }
   const [dLo, dHi] = padDomain(extent(values));
-  const xScale = linearScale(0, Math.max(points.length - 1, 1), x0, x1);
+  const xScale = linearScale(xDomLo, xDomHi, x0, x1);
   const yScale = linearScale(dLo, dHi, y1, y0); // inverted: bigger kg = higher up
 
   const dates = points.map((p) => p.date);
@@ -102,6 +123,29 @@ export function renderWeightChart(container, { points, targetWeight, unitLabel =
     );
   }
 
+  // --- goal (plan) line: trend-start → target, into the future ------------- #
+  // A quiet DOTTED green diagonal, deliberately unlike the solid blue trend and the
+  // grey dashed horizontal target it lands on — it reads as a plan/reference, not a
+  // prediction. Clipped to the visible span; it can enter from the left edge and
+  // runs out to the target date on the right.
+  if (goalVisible) {
+    const gx1 = round1(xScale(goalXa));
+    const gy1 = round1(yScale(goalWeightAt(goal, goalXa)));
+    const gx2 = round1(xScale(goalXb));
+    const gy2 = round1(yScale(goalWeightAt(goal, goalXb)));
+    parts.push(
+      `<line x1="${gx1}" y1="${gy1}" x2="${gx2}" y2="${gy2}" stroke="${COLOR.goal}" ` +
+        'stroke-width="2" stroke-dasharray="1 6" stroke-linecap="round" opacity="0.8"/>',
+      `<text class="chart-axis-label" x="${gx2}" y="${gy2 - 8}" text-anchor="end" fill="${COLOR.goal}">goal</text>`,
+    );
+    // Label the target date on the x-axis when the plan extends past the data.
+    if (goalTargetIso != null && goal.endX > points.length - 1) {
+      parts.push(
+        `<text class="chart-axis-label" x="${gx2}" y="${y1 + 20}" text-anchor="end">${formatDayLabel(goalTargetIso)}</text>`,
+      );
+    }
+  }
+
   // --- raw daily points (faint) --------------------------------------------- #
   const dots = [];
   for (let i = 0; i < points.length; i += 1) {
@@ -138,8 +182,13 @@ export function renderWeightChart(container, { points, targetWeight, unitLabel =
   return {
     width,
     height,
-    x0,
-    x1,
+    // x0/x1 are the pixel columns of the FIRST and LAST data points (what the
+    // tooltip's nearestIndex inverts against). These equal the plot edges in the
+    // normal case, but when the goal line stretches the domain into the future the
+    // last point sits left of the right edge — so derive them from the scale, not
+    // the margins, or hover mapping would drift.
+    x0: xScale(0),
+    x1: xScale(Math.max(points.length - 1, 0)),
     y0,
     y1,
     points: points.map((p, i) => ({

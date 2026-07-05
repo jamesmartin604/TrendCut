@@ -83,11 +83,18 @@
           <h2 class="chart-title">Weight Trend</h2>
           <p class="chart-subtitle" id="chart-subtitle">Last 30 days</p>
         </div>
-        <div class="range-group" role="group" aria-label="Chart range">
-          <button class="range-btn" type="button" data-range="7">7D</button>
-          <button class="range-btn is-active" type="button" data-range="30">30D</button>
-          <button class="range-btn" type="button" data-range="90">90D</button>
-          <button class="range-btn" type="button" data-range="all">All</button>
+        <div class="chart-controls">
+          <label class="switch" id="goal-toggle-label" title="Show a plan line from your starting trend to your target">
+            <input type="checkbox" id="goal-toggle" />
+            <span class="switch-track"><span class="switch-thumb"></span></span>
+            <span class="switch-text">Goal line</span>
+          </label>
+          <div class="range-group" role="group" aria-label="Chart range">
+            <button class="range-btn" type="button" data-range="7">7D</button>
+            <button class="range-btn is-active" type="button" data-range="30">30D</button>
+            <button class="range-btn" type="button" data-range="90">90D</button>
+            <button class="range-btn" type="button" data-range="all">All</button>
+          </div>
         </div>
       </div>
       <div class="chart-wrap">

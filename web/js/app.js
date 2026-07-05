@@ -9,18 +9,38 @@
  */
 
 import { getEstimate, getSettings } from "./api.js";
-import { nearestIndex } from "./chart-math.js";
+import { goalLineAnchors, nearestIndex } from "./chart-math.js";
 import { renderWeightChart } from "./chart.js";
 import { openEntryForm } from "./entry-form.js";
 import { formatWeight, fromKg, unitLabel } from "./units.js";
 
 const $ = (id) => document.getElementById(id);
 
+// Opt-in goal line, remembered client-side only (localStorage — no API/schema
+// change). Defaults OFF. Wrapped so a locked-down browser (storage disabled) still
+// works, just without persistence.
+const GOAL_PREF_KEY = "trendcut.goalLine";
+function readGoalPref() {
+  try {
+    return localStorage.getItem(GOAL_PREF_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+function writeGoalPref(on) {
+  try {
+    localStorage.setItem(GOAL_PREF_KEY, on ? "1" : "0");
+  } catch {
+    /* storage unavailable — toggle just won't persist this session */
+  }
+}
+
 const state = {
   estimate: null,
   settings: null,
   range: "30", // chart range in days, or "all"
   chartGeometry: null, // hit-test geometry from the last chart render (tooltip)
+  goalLine: readGoalPref(), // show the plan/goal line on the weight chart
 };
 
 // Display unit preference (stored data stays kg; this only affects presentation).
@@ -105,6 +125,21 @@ function lastTrendPoint() {
     if (trend[i].trend_kg != null) return trend[i];
   }
   return null;
+}
+
+/** First day whose smoothed trend is defined — the goal line's start anchor. */
+function firstTrendPoint() {
+  const { trend } = state.estimate;
+  for (let i = 0; i < trend.length; i += 1) {
+    if (trend[i].trend_kg != null) return trend[i];
+  }
+  return null;
+}
+
+/** A goal line is possible only once both a target weight and date are set. */
+function hasTarget() {
+  const s = state.settings;
+  return s != null && s.target_weight != null && s.target_date != null;
 }
 
 function renderPace() {
@@ -352,14 +387,68 @@ function renderChart() {
     weight_kg: fromKg(p.weight_kg, u),
     trend_kg: fromKg(p.trend_kg, u),
   }));
+
+  // Goal (plan) line — only when toggled on AND a target exists AND there's a
+  // trend-start to anchor to. Anchors are computed by a pure function on the FULL
+  // trend series (not the visible slice) and the stored target, then converted to
+  // the display unit; when hidden or unavailable, `goal` is null and the chart
+  // frames to the data as usual.
+  let goal = null;
+  const start = state.estimate.trend.length ? firstTrendPoint() : null;
+  if (state.goalLine && hasTarget() && start != null && disp.length) {
+    goal = goalLineAnchors({
+      displayStartIso: disp[0].date,
+      firstLoggedIso: start.date,
+      startWeight: fromKg(start.trend_kg, u),
+      targetIso: state.settings.target_date,
+      targetWeight: fromKg(state.settings.target_weight, u),
+    });
+  }
+
   state.chartGeometry = renderWeightChart($("chart"), {
     points: disp,
     targetWeight: fromKg(state.settings.target_weight, u),
     unitLabel: unitLabel(u),
+    goal,
+    goalTargetIso: goal ? state.settings.target_date : null,
   });
   hideChartTooltip(); // a re-render (resize / range change) invalidates any open tooltip
   $("chart-subtitle").textContent =
     state.range === "all" ? "All logged days" : `Last ${state.range} days`;
+}
+
+// ---------- goal-line toggle ---------- //
+
+/**
+ * Reflect target availability into the toggle: enabled + checked-state when a
+ * target exists, otherwise disabled with a "set a target" hint. Called after each
+ * refresh so a target saved in Settings lights the control up on return.
+ */
+function syncGoalToggle() {
+  const input = $("goal-toggle");
+  const label = $("goal-toggle-label");
+  const text = label.querySelector(".switch-text");
+  const enabled = hasTarget();
+
+  input.disabled = !enabled;
+  label.classList.toggle("is-disabled", !enabled);
+  if (enabled) {
+    input.checked = state.goalLine;
+    text.textContent = "Goal line";
+    label.title = "Show a plan line from your starting trend to your target";
+  } else {
+    input.checked = false;
+    text.textContent = "Goal line — set a target first";
+    label.title = "Set a target weight and date in Settings to plan a goal line";
+  }
+}
+
+function wireGoalToggle() {
+  $("goal-toggle").addEventListener("change", (e) => {
+    state.goalLine = e.target.checked;
+    writeGoalPref(state.goalLine);
+    renderChart(); // redraw immediately; extends/reframes the x-domain to match
+  });
 }
 
 function wireRangeButtons() {
@@ -393,6 +482,7 @@ function renderAll() {
   renderPace();
   renderRawWeightCard();
   renderMetrics();
+  syncGoalToggle();
   renderChart();
 }
 
@@ -406,6 +496,7 @@ async function refresh() {
 async function init() {
   wireLogButtons();
   wireRangeButtons();
+  wireGoalToggle();
   wireChartTooltip();
 
   // Redraw the chart when its box resizes (responsive, PRD §8).
