@@ -28,6 +28,18 @@ jobs:
       - name: Test (pytest)
         run: pytest
 
+      # Frontend pure-logic tests via Node's BUILT-IN test runner — no npm install,
+      # no framework, no build step (web/package.json is just a `type: module`
+      # marker so Node can import the existing ES-module files).
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Frontend logic tests (node --test)
+        run: node --test
+        working-directory: web
+
   # Deploy runs ONLY on a push to main, and ONLY after lint-and-test succeeds
   # (`needs:` makes a red lint/test result block the deploy entirely). Pull
   # requests and pushes to other branches still run lint-and-test above but never

@@ -12,6 +12,7 @@ import { getEstimate, getSettings } from "./api.js";
 import { goalLineAnchors, nearestIndex } from "./chart-math.js";
 import { renderWeightChart } from "./chart.js";
 import { openEntryForm } from "./entry-form.js";
+import { plateauLabel, tdeeHeroView } from "./status.js";
 import { formatWeight, fromKg, unitLabel } from "./units.js";
 
 const $ = (id) => document.getElementById(id);
@@ -74,8 +75,9 @@ function renderHero() {
   const ciEl = $("tdee-ci");
   const unitEl = $("tdee-unit");
   const lowConf = $("low-conf-chip");
+  const view = tdeeHeroView(tdee);
 
-  if (tdee.status === "insufficient_data") {
+  if (view.insufficient) {
     valueEl.textContent = "Not enough data yet";
     valueEl.classList.add("is-muted");
     unitEl.hidden = true;
@@ -87,27 +89,19 @@ function renderHero() {
     return;
   }
 
-  valueEl.textContent = fmtInt(tdee.tdee);
+  valueEl.textContent = fmtInt(view.tdee);
   valueEl.classList.remove("is-muted");
-  unitEl.hidden = false;
-  ciEl.textContent = `${fmtInt(tdee.ci_low)}–${fmtInt(tdee.ci_high)} kcal · 95% CI`;
+  unitEl.hidden = !view.showUnit;
+  ciEl.textContent = `${fmtInt(view.ciLow)}–${fmtInt(view.ciHigh)} kcal · 95% CI`;
 
-  const isLow = tdee.status === "low_confidence";
-  lowConf.hidden = !isLow;
+  lowConf.hidden = !view.lowConfidence;
   // Low confidence: the wide CI is the story — make it the prominent line.
-  ciEl.classList.toggle("is-prominent", isLow);
+  ciEl.classList.toggle("is-prominent", view.ciProminent);
 }
-
-const PLATEAU_LABEL = {
-  on_track: ["On track", "is-ontrack"],
-  slowing: ["Slowing", "is-slowing"],
-  stalled: ["Stalled", "is-stalled"],
-  undetermined: ["Gathering data", "is-undetermined"],
-};
 
 function renderPlateau() {
   const { plateau } = state.estimate;
-  const [label, cls] = PLATEAU_LABEL[plateau.state] ?? ["–", "is-undetermined"];
+  const { label, cls } = plateauLabel(plateau.state);
 
   const dot = $("plateau-dot");
   const text = $("plateau-state");

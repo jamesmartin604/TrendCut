@@ -74,7 +74,24 @@ PowerShell:
 $env:HYPOTHESIS_PROFILE="deep"; pytest tests/test_properties.py -q; Remove-Item Env:HYPOTHESIS_PROFILE
 ```
 
-These three are exactly what CI runs on every push and pull request (see
+### Frontend logic tests
+
+The frontend's **pure** logic (chart coordinate math + its inverse, axis
+domain/tick computation, the goal-line anchors, weekly aggregation, unit
+conversion, and the honest status→display mapping) is covered by a small suite that
+uses **Node's built-in test runner** — no npm, no framework, no build step. The only
+enabling file is a one-line [`web/package.json`](web/package.json) that marks the
+existing ES-module files as `type: module` so Node can import them (it has zero
+dependencies; the browser ignores it).
+
+Run it from the `web/` directory (Node auto-discovers `js/tests/*.test.js`):
+
+```bash
+cd web && node --test        # requires Node 18+ (built-in runner)
+```
+
+These checks — ruff, pytest, and the frontend tests — are exactly what CI runs on
+every push and pull request (see
 [`.github/workflows/ci.yml`](.github/workflows/ci.yml)).
 
 ## Running the app

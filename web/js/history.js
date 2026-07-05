@@ -19,6 +19,7 @@
 import { deleteEntry, getEstimate, getSettings, getTdeeHistory, listEntries } from "./api.js";
 import { openEntryForm } from "./entry-form.js";
 import { formatWeight, fromKg, unitLabel } from "./units.js";
+import { aggregateWeeks } from "./weekly.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -43,25 +44,6 @@ function fmtShort(iso) {
     day: "numeric",
     timeZone: "UTC",
   });
-}
-
-function mean(nums) {
-  const vals = nums.filter((n) => n != null && !Number.isNaN(n));
-  return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
-}
-
-/** Monday (UTC) of the ISO week containing `iso`, as YYYY-MM-DD. */
-function weekStart(iso) {
-  const d = new Date(`${iso}T00:00:00Z`);
-  const dow = (d.getUTCDay() + 6) % 7; // 0 = Monday … 6 = Sunday
-  d.setUTCDate(d.getUTCDate() - dow);
-  return d.toISOString().slice(0, 10);
-}
-
-function addDaysIso(iso, days) {
-  const d = new Date(`${iso}T00:00:00Z`);
-  d.setUTCDate(d.getUTCDate() + days);
-  return d.toISOString().slice(0, 10);
 }
 
 // ---------- entries list ---------- //
@@ -158,62 +140,30 @@ function renderWeekly() {
   const u = state.units;
   const ul = unitLabel(u);
 
-  // Group entries by ISO-week Monday.
-  const byWeek = new Map();
-  for (const e of state.entries) {
-    const wk = weekStart(e.date);
-    if (!byWeek.has(wk)) byWeek.set(wk, []);
-    byWeek.get(wk).push(e);
-  }
-
-  const weeks = [...byWeek.keys()].sort((a, b) => (a < b ? 1 : -1)); // newest first
+  // Pure bucketing + aggregation (weekly.js); this layer only formats for display.
+  const weeks = aggregateWeeks(state.entries, state.trendByDate, state.tdeeByDate);
   listEl.innerHTML = weeks
     .map((wk) => {
-      const days = byWeek.get(wk);
-      const sunday = addDaysIso(wk, 6);
-      const range = `${fmtShort(wk)} – ${fmtShort(sunday)}`;
-      const logged = days.length;
-
-      const avgW = mean(days.map((d) => d.weight_kg));
-      const avgK = mean(days.map((d) => d.kcal));
-
-      // Trend values for this week's days (from /estimate), for the average and the
-      // net change (first→last available trend within the week).
-      const trends = days
-        .map((d) => ({ date: d.date, t: state.trendByDate[d.date] }))
-        .filter((x) => x.t != null)
-        .sort((a, b) => (a.date < b.date ? -1 : 1));
-      const avgT = mean(trends.map((x) => x.t));
-      const netChange = trends.length >= 2 ? trends[trends.length - 1].t - trends[0].t : null;
-
-      // Weekly TDEE: the most recent rolling estimate within the week that the
-      // estimator actually produced. "—" when it declined all week (early/pre-window).
-      let weeklyTdee = null;
-      for (const d of [...days].sort((a, b) => (a.date < b.date ? -1 : 1))) {
-        const h = state.tdeeByDate[d.date];
-        if (h != null && h.tdee != null) weeklyTdee = h.tdee;
-      }
-      const deficit = weeklyTdee != null && avgK != null ? weeklyTdee - avgK : null;
-
+      const range = `${fmtShort(wk.weekStart)} – ${fmtShort(wk.weekEnd)}`;
       const wDisp = (kg) => (kg == null ? "—" : `${formatWeight(kg, u)} ${ul}`);
       const changeDisp =
-        netChange == null
+        wk.netChangeKg == null
           ? "—"
-          : `${netChange > 0 ? "+" : netChange < 0 ? "−" : ""}${Math.abs(fromKg(netChange, u)).toFixed(1)} ${ul}`;
+          : `${wk.netChangeKg > 0 ? "+" : wk.netChangeKg < 0 ? "−" : ""}${Math.abs(fromKg(wk.netChangeKg, u)).toFixed(1)} ${ul}`;
 
       return `
       <article class="card weekly-card">
         <header class="weekly-head">
           <span class="weekly-range">${range}</span>
-          <span class="weekly-adherence">${logged} / 7 days</span>
+          <span class="weekly-adherence">${wk.logged} / 7 days</span>
         </header>
         <div class="weekly-grid">
-          <div class="weekly-stat"><span class="weekly-k">Avg weight</span><span class="weekly-v">${wDisp(avgW)}</span></div>
-          <div class="weekly-stat"><span class="weekly-k">Avg trend</span><span class="weekly-v">${wDisp(avgT)}</span></div>
+          <div class="weekly-stat"><span class="weekly-k">Avg weight</span><span class="weekly-v">${wDisp(wk.avgWeightKg)}</span></div>
+          <div class="weekly-stat"><span class="weekly-k">Avg trend</span><span class="weekly-v">${wDisp(wk.avgTrendKg)}</span></div>
           <div class="weekly-stat"><span class="weekly-k">Trend change</span><span class="weekly-v">${changeDisp}</span></div>
-          <div class="weekly-stat"><span class="weekly-k">Avg intake</span><span class="weekly-v">${avgK == null ? "—" : `${fmtInt(avgK)} kcal`}</span></div>
-          <div class="weekly-stat"><span class="weekly-k">Est. TDEE</span><span class="weekly-v">${weeklyTdee == null ? "—" : `${fmtInt(weeklyTdee)} kcal`}</span></div>
-          <div class="weekly-stat"><span class="weekly-k">Est. deficit</span><span class="weekly-v">${deficit == null ? "—" : `${deficit >= 0 ? "" : "+"}${fmtInt(Math.abs(deficit))} kcal`}</span></div>
+          <div class="weekly-stat"><span class="weekly-k">Avg intake</span><span class="weekly-v">${wk.avgIntake == null ? "—" : `${fmtInt(wk.avgIntake)} kcal`}</span></div>
+          <div class="weekly-stat"><span class="weekly-k">Est. TDEE</span><span class="weekly-v">${wk.weeklyTdee == null ? "—" : `${fmtInt(wk.weeklyTdee)} kcal`}</span></div>
+          <div class="weekly-stat"><span class="weekly-k">Est. deficit</span><span class="weekly-v">${wk.deficit == null ? "—" : `${wk.deficit >= 0 ? "" : "+"}${fmtInt(Math.abs(wk.deficit))} kcal`}</span></div>
         </div>
       </article>`;
     })

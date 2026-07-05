@@ -1,0 +1,5 @@
+{
+  "private": true,
+  "type": "module",
+  "description": "Module-type marker only: lets `node --test` load the frontend's ESM files. No dependencies, no build step, no npm install — the browser ignores this file."
+}
