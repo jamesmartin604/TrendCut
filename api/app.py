@@ -103,7 +103,9 @@ def create_app(storage: Storage | None = None) -> FastAPI:
         overwritten = len({row.date for row in rows} & existing)
         for row in rows:
             warnings.extend(f"{row.date}: {w}" for w in entry_warnings(row.weight_kg, row.kcal))
-            store.upsert_entry(row.date, row.weight_kg, row.kcal)
+        # All rows in ONE transaction (atomic, and no per-row commit churn — the
+        # per-row upsert loop was the "database is locked" trigger on import).
+        store.upsert_entries([(row.date, row.weight_kg, row.kcal) for row in rows])
         if overwritten:
             warnings.append(
                 f"{overwritten} existing entr{'y was' if overwritten == 1 else 'ies were'} "

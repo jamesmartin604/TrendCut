@@ -81,7 +81,10 @@ class Storage:
     def __init__(self, db_path: str = ":memory:") -> None:
         # check_same_thread=False: FastAPI runs sync handlers in a threadpool. A
         # single connection guarded by a lock is plenty for a single-user app.
-        self._conn = sqlite3.connect(db_path, check_same_thread=False)
+        # timeout=30: if some *other* connection to the same file (a second app
+        # process, a DB browser) briefly holds the write lock, wait for it instead
+        # of raising "database is locked" immediately.
+        self._conn = sqlite3.connect(db_path, check_same_thread=False, timeout=30.0)
         self._conn.row_factory = sqlite3.Row
         self._lock = threading.Lock()
         self._init_schema()
@@ -146,6 +149,40 @@ class Storage:
             )
             self._conn.commit()
         return self.get_entry(date)  # type: ignore[return-value]
+
+    def upsert_entries(self, rows: list[tuple[str, float | None, int | None]]) -> int:
+        """Upsert many ``(date, weight_kg, kcal)`` rows in ONE transaction.
+
+        The bulk-import path. One BEGIN…COMMIT for the whole batch instead of a
+        transaction per row: the per-row commits gave any other connection on the
+        file N chances to grab the write lock mid-loop ("database is locked" on
+        import), and a single transaction is also simply faster. The batch is
+        **atomic** — on any failure it rolls back and the DB is unchanged (rows the
+        parser skipped never reach this method, so good rows in a file with bad
+        rows still import; only an infrastructure failure mid-write rolls back).
+        Per-row semantics are identical to :meth:`upsert_entry`: upsert by date,
+        ``created_at`` preserved, ``updated_at`` moved.
+        """
+        now = _now()
+        params = [(date, weight_kg, kcal, now, now) for date, weight_kg, kcal in rows]
+        with self._lock:
+            try:
+                self._conn.executemany(
+                    """
+                    INSERT INTO entries (date, weight_kg, kcal, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?)
+                    ON CONFLICT(date) DO UPDATE SET
+                        weight_kg  = excluded.weight_kg,
+                        kcal       = excluded.kcal,
+                        updated_at = excluded.updated_at
+                    """,
+                    params,
+                )
+                self._conn.commit()
+            except Exception:
+                self._conn.rollback()
+                raise
+        return len(params)
 
     def get_entry(self, date: str) -> Entry | None:
         # Reads take the lock too: the connection is shared across the threadpool

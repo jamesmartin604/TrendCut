@@ -284,6 +284,36 @@ def test_csv_import_handles_missing_and_malformed(client: TestClient) -> None:
     assert "not-a-date" not in by_date
 
 
+def test_csv_import_many_rows_lands_completely(client: TestClient) -> None:
+    """Regression: a multi-row import must succeed in one transaction — the
+    per-row-commit loop raised sqlite3 "database is locked" on bulk import."""
+    lines = ["date,weight_kg,kcal"]
+    lines += [f"2026-02-{i:02d},{80 - i * 0.1:.1f},{1900 + i}" for i in range(1, 13)]
+    result = client.post("/entries/import", content="\n".join(lines) + "\n").json()
+    assert result["imported"] == 12
+    listed = client.get("/entries").json()
+    assert len(listed) == 12
+    assert listed[0]["date"] == "2026-02-01"
+    assert listed[-1]["kcal"] == 1912
+    # Single-entry logging keeps working after a bulk import (same connection).
+    r = client.put("/entries/2026-02-20", json={"weight_kg": 78.5, "kcal": 1800})
+    assert r.status_code == 200
+    assert len(client.get("/entries").json()) == 13
+
+
+def test_csv_import_bad_row_still_commits_good_rows(client: TestClient) -> None:
+    """Intended semantics: parser-level bad rows are skipped BEFORE the write, so
+    the good rows still import (the batch write itself is all-or-nothing only for
+    infrastructure failures, which don't occur here)."""
+    csv_text = (
+        "date,weight_kg,kcal\n2026-03-01,79.0,1900\ngarbage,heavy,many\n2026-03-03,78.8,1850\n"
+    )
+    result = client.post("/entries/import", content=csv_text).json()
+    assert result["imported"] == 2
+    assert any("bad or missing date" in w for w in result["warnings"])
+    assert [e["date"] for e in client.get("/entries").json()] == ["2026-03-01", "2026-03-03"]
+
+
 def test_csv_import_upserts_existing_dates(client: TestClient) -> None:
     client.put("/entries/2026-01-01", json={"weight_kg": 80.0, "kcal": 2000})
     client.post("/entries/import", content="date,weight_kg,kcal\n2026-01-01,78.0,1750\n")

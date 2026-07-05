@@ -8,6 +8,7 @@ shared state and no reliance on a real DB file.
 
 from __future__ import annotations
 
+import sqlite3
 import threading
 
 import pytest
@@ -104,6 +105,41 @@ def test_settings_persist_across_reads(store: Storage) -> None:
     s = store.get_settings()
     assert s.target_weight == 75.0
     assert s.target_date == "2026-08-31"
+
+
+def test_bulk_upsert_many_rows_in_one_transaction(store: Storage) -> None:
+    """Regression for the import path: N rows must be written as ONE transaction
+    (the per-row commit loop raised "database is locked" on bulk import)."""
+    rows = [(f"2026-01-{i:02d}", 80.0 - i * 0.1, 2000 + i) for i in range(1, 16)]
+    assert store.upsert_entries(rows) == 15
+    listed = store.list_entries()
+    assert len(listed) == 15
+    assert listed[0].weight_kg == 79.9
+    assert listed[-1].kcal == 2015
+
+
+def test_bulk_upsert_keeps_upsert_semantics(store: Storage) -> None:
+    first = store.upsert_entry("2026-01-01", 80.0, 2000)
+    store.upsert_entries([("2026-01-01", 79.5, 1900), ("2026-01-02", 79.4, None)])
+    # Same overwrite-by-date behaviour as the single-row path: no duplicate row,
+    # created_at preserved, values replaced.
+    listed = store.list_entries()
+    assert len(listed) == 2
+    assert listed[0].weight_kg == 79.5
+    assert listed[0].created_at == first.created_at
+
+
+def test_bulk_upsert_is_atomic_on_failure(store: Storage) -> None:
+    store.upsert_entry("2026-01-01", 80.0, 2000)
+    # A mid-batch infrastructure failure (unbindable parameter) must roll the whole
+    # batch back — no half-imported file.
+    bad = [("2026-01-02", 79.9, 1900), ("2026-01-03", {"boom": 1}, 1800)]
+    with pytest.raises(sqlite3.Error):
+        store.upsert_entries(bad)  # type: ignore[arg-type]
+    assert [e.date for e in store.list_entries()] == ["2026-01-01"]
+    # And the connection is left usable (no dangling open transaction).
+    store.upsert_entry("2026-01-04", 79.7, 1850)
+    assert len(store.list_entries()) == 2
 
 
 def test_concurrent_reads_are_safe(store: Storage) -> None:
