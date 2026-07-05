@@ -176,6 +176,83 @@ async function exportData(format) {
   }
 }
 
+// ---------- import ---------- //
+
+// File text held between "picked" and "confirmed" — the POST happens only on the
+// explicit confirm click, never on file selection (import upserts: an imported
+// date overwrites the existing entry for that date, and there is no undo).
+let pendingImport = null;
+
+function resetImportUi() {
+  pendingImport = null;
+  $("import-confirm").hidden = true;
+  $("import-file").value = ""; // re-selecting the same file must re-fire `change`
+}
+
+async function onImportFilePicked(file) {
+  $("import-summary").hidden = true;
+  $("import-warnings").hidden = true;
+  $("import-error").hidden = true;
+  if (!file) return;
+  try {
+    pendingImport = { name: file.name, text: await file.text() };
+  } catch (err) {
+    $("import-error").textContent = `Couldn't read the file: ${err.message}`;
+    $("import-error").hidden = false;
+    return;
+  }
+  $("import-confirm-text").textContent =
+    `Import "${file.name}"? Rows are matched by date: dates you've already logged ` +
+    "will be OVERWRITTEN by the file's values, and there is no undo. New dates are added.";
+  $("import-confirm").hidden = false;
+}
+
+async function runImport() {
+  const { text } = pendingImport;
+  const btn = $("import-confirm-btn");
+  btn.disabled = true;
+  btn.textContent = "Importing…";
+  try {
+    const res = await fetch("/entries/import", {
+      method: "POST",
+      headers: { "Content-Type": "text/csv" },
+      body: text,
+    });
+    if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+    renderImportResult(await res.json());
+  } catch (err) {
+    $("import-error").textContent = `Import failed: ${err.message}. Nothing may have been saved — check History.`;
+    $("import-error").hidden = false;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Import and overwrite";
+    resetImportUi();
+  }
+}
+
+/**
+ * Show the endpoint's ImportResult inline: the imported count as the headline, and
+ * every warning (skipped rows + why, unit assumption, overwrite count) verbatim —
+ * the warnings are the honest record of what the tolerant parser did.
+ */
+function renderImportResult(result) {
+  const summary = $("import-summary");
+  const warnEl = $("import-warnings");
+  if (result.imported === 0) {
+    $("import-error").textContent = "Nothing was imported.";
+    $("import-error").hidden = false;
+  } else {
+    summary.textContent =
+      `Imported ${result.imported} ${result.imported === 1 ? "entry" : "entries"}. ` +
+      "The Dashboard and History recompute from the new data on their next load.";
+    summary.hidden = false;
+  }
+  if (result.warnings.length > 0) {
+    warnEl.innerHTML = result.warnings.map((w) => `<span>${escapeHtml(w)}</span>`).join("");
+    warnEl.hidden = false;
+  }
+}
+
 // ---------- wiring ---------- //
 
 function init() {
@@ -192,6 +269,11 @@ function init() {
   });
   $("export-csv").addEventListener("click", () => exportData("csv"));
   $("export-json").addEventListener("click", () => exportData("json"));
+
+  $("import-csv").addEventListener("click", () => $("import-file").click());
+  $("import-file").addEventListener("change", (e) => onImportFilePicked(e.target.files[0]));
+  $("import-confirm-btn").addEventListener("click", runImport);
+  $("import-cancel-btn").addEventListener("click", resetImportUi);
 
   load().catch((err) => {
     const el = $("page-error");

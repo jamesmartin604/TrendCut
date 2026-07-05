@@ -133,6 +133,30 @@
           </div>
           <div class="form-error" id="export-error" hidden></div>
         </div>
+        <div class="settings-row settings-row-stack">
+          <span class="settings-row-label">Import from CSV</span>
+          <p class="settings-hint">
+            A flat CSV with a date and a weight column (calories optional). Common
+            header names and date formats from other apps are recognised; lb values
+            convert to kg. MyFitnessPal's multi-file zip is not supported.
+          </p>
+          <div class="export-actions">
+            <button class="btn btn-ghost" type="button" id="import-csv">Import from CSV</button>
+          </div>
+          <input type="file" id="import-file" accept=".csv,text/csv" hidden />
+          <div class="form-warnings" id="import-confirm" hidden>
+            <span id="import-confirm-text"></span>
+            <div class="export-actions">
+              <button class="btn btn-primary" type="button" id="import-confirm-btn">
+                Import and overwrite
+              </button>
+              <button class="btn btn-ghost" type="button" id="import-cancel-btn">Cancel</button>
+            </div>
+          </div>
+          <p class="settings-hint" id="import-summary" hidden></p>
+          <div class="form-warnings" id="import-warnings" hidden></div>
+          <div class="form-error" id="import-error" hidden></div>
+        </div>
       </div>
     </section>
   </main>

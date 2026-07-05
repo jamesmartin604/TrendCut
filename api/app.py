@@ -93,10 +93,22 @@ def create_app(storage: Storage | None = None) -> FastAPI:
     @app.post("/entries/import", response_model=ImportResult)
     async def import_csv(request: Request, store: Storage = Depends(get_storage)) -> ImportResult:
         text = (await request.body()).decode("utf-8-sig")
-        rows, warnings = parse_entries_csv(text)
+        # The user's display-units setting resolves a unit-less weight header (the
+        # parser warns whenever that assumption is used).
+        rows, warnings = parse_entries_csv(text, assumed_units=store.get_settings().units)
+        # Import upserts, so a date that already exists gets overwritten — count
+        # those before writing and surface it (the UI warns pre-commit; this
+        # confirms what actually happened).
+        existing = {e.date for e in store.list_entries()}
+        overwritten = len({row.date for row in rows} & existing)
         for row in rows:
             warnings.extend(f"{row.date}: {w}" for w in entry_warnings(row.weight_kg, row.kcal))
             store.upsert_entry(row.date, row.weight_kg, row.kcal)
+        if overwritten:
+            warnings.append(
+                f"{overwritten} existing entr{'y was' if overwritten == 1 else 'ies were'} "
+                f"overwritten with the file's values."
+            )
         return ImportResult(imported=len(rows), warnings=warnings)
 
     @app.get("/entries/export")

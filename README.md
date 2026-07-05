@@ -125,7 +125,12 @@ Then open **http://127.0.0.1:8000/** in a browser for the dashboard:
   regression window (14/21/28 days), and display units (kg/lb). Saving persists via
   `PUT /settings`; the Dashboard's projection and the estimator's window/α then
   reflect the new values. Units are a display preference only — data is always
-  stored in kg and converted at the presentation layer.
+  stored in kg and converted at the presentation layer. The Backup card exports all
+  entries (CSV/JSON download) and **imports a CSV** — the import button shows a
+  confirm step first (import upserts by date, so an imported date *overwrites* that
+  day and there is no undo), then displays the result inline: how many entries
+  imported, rows skipped and why, any unit assumption made, and how many existing
+  entries were overwritten.
 * **TDEE over time** (`/tdee.html`) — a second hand-rolled chart of the rolling TDEE
   estimate recomputed as-of each past day (`GET /tdee-history`), showing how
   maintenance drifts down as the body adapts. It honestly breaks the line across
@@ -147,7 +152,7 @@ Key endpoints:
 | `GET /settings` / `PUT /settings` | Read / partially update α, window, energy density, target, units |
 | `GET /estimate`          | Recompute trend + TDEE (point, CI, status) + plateau verdict   |
 | `GET /tdee-history`      | Rolling TDEE estimate recomputed as-of each past day (drift series) |
-| `POST /entries/import`   | Bulk-upsert a CSV body (see format below)                      |
+| `POST /entries/import`   | Bulk-upsert a CSV body — tolerant flat-CSV parsing (see format below) |
 | `GET /entries/export?format=csv\|json` | Dump all entries                                 |
 
 **Derived, never stored.** Trend weight, TDEE, and the plateau verdict are
@@ -159,22 +164,48 @@ surfaces those statuses unchanged.
 ### CSV import format
 
 `POST /entries/import` takes a CSV body (the endpoint reads the raw request body,
-UTF-8 with optional BOM). A header row is required; columns are case-insensitive:
+UTF-8 with optional BOM) — the same endpoint the Settings import button uses. The
+parser is **tolerant of the flat date/weight(/calories) exports of popular
+weight/nutrition apps** rather than matched to any one format. A header row is
+required; matching is case-insensitive, whitespace-trimmed, and BOM-proof:
 
-* `date` — **required**, ISO `YYYY-MM-DD`.
-* `weight_kg` (alias `weight`) — optional; a blank cell means "no weigh-in" (stored
-  as `NULL`, *not* zero).
-* `kcal` (aliases `calories`, `cals`) — optional; blank means "not logged".
+* **date** — required column; aliases: `date`, `day`, `timestamp`. Values may be
+  ISO `YYYY-MM-DD` (with or without a time part), numeric `MM/DD/YYYY` /
+  `D/M/YYYY` (day-first is used when the month slot is impossible; a value valid
+  both ways is read US month-first *with a warning*), or `Jul 4 2026` /
+  `4 Jul, 2026` style — all normalised to ISO.
+* **weight** — required column; aliases: `weight`, `weight_kg`, `mass`,
+  `body weight`, `Weight (kg)`, `Weight (lb)`, `Weight (lbs)`. A blank cell means
+  "no weigh-in" (stored as `NULL`, *not* zero).
+* **calories** — optional; aliases: `kcal`, `calories`, `cals`, `energy`,
+  `Energy (kcal)`, `Calories (kcal)`. Blank means "not logged".
+* Any other columns (body fat, waist, notes, …) are ignored silently.
+
+**Units.** Entries are stored in kg. A weight header that names a unit is trusted:
+lb values convert to kg, kg is used as-is. A bare `weight`/`mass` header is
+resolved with the *user's current display-units setting* **and a warning is added
+naming the assumption** — value ranges are never used to guess, so a silent kg/lb
+corruption can't happen.
 
 Handling rules:
 
 * A row with a missing/unparseable `date` is **skipped** and reported in the
-  response `warnings` (the import does not fail).
-* A non-numeric `weight_kg`/`kcal` is treated as missing (blank), with a warning.
+  response `warnings`; one bad row never aborts the file. If no date or no weight
+  column can be mapped at all, the whole import fails with a warning naming what's
+  missing.
+* A non-numeric `weight`/`calories` value is treated as missing (blank), with a
+  warning. Obvious numeric strings are coerced (e.g. `"1,900"` kcal); a European
+  decimal comma (`78,5`) is deliberately *not* misread ×10 — it becomes a warning.
+* Fully blank rows are skipped silently; a row with no usable weight *and* no
+  usable calories is skipped with a warning.
 * Duplicate dates — within the file or already in the DB — **upsert**: the last
-  value wins, entries are never duplicated.
+  value wins, entries are never duplicated. The response warns how many existing
+  entries were overwritten.
 * Plausibility guards (weight far outside a human range, negative calories) produce
   soft `warnings` but never reject the row.
+
+**Not supported (by design):** MyFitnessPal's multi-file export zip and meal-split
+nutrition files — flat CSV only.
 
 Example:
 
