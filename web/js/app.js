@@ -12,7 +12,7 @@ import { getEstimate, getSettings } from "./api.js";
 import { goalLineAnchors, nearestIndex } from "./chart-math.js";
 import { renderWeightChart } from "./chart.js";
 import { openEntryForm } from "./entry-form.js";
-import { plateauLabel, tdeeHeroView } from "./status.js";
+import { fluctuationNote, plateauLabel, tdeeHeroView } from "./status.js";
 import { formatWeight, fromKg, unitLabel } from "./units.js";
 
 const $ = (id) => document.getElementById(id);
@@ -248,6 +248,8 @@ function renderRawWeightCard() {
   const rawEl = $("raw-value");
   const unitEl = $("raw-unit");
   const noteEl = $("raw-note");
+  const contextEl = $("raw-context");
+  contextEl.hidden = true; // shown only when a fluctuation note is warranted
 
   // "Current" means the most recent logged day. If that day has no weigh-in
   // (calorie-only) or there's no data at all, show an honest empty state rather
@@ -283,6 +285,13 @@ function renderRawWeightCard() {
       const dir = diff > 0 ? "above" : "below";
       noteEl.textContent =
         `${dateStr} · trend ${trendDisp} ${ul} · ${sign}${Math.abs(diff).toFixed(1)} ${dir} trend`;
+    }
+    // Reassurance note for a notable (threshold-gated) raw-vs-trend gap. Pure
+    // helper decides; it never asserts a cause — only that swings are expected.
+    const note = fluctuationNote(latest.weight_kg, latest.trend_kg, u);
+    if (note != null) {
+      contextEl.textContent = note;
+      contextEl.hidden = false;
     }
   } else {
     noteEl.textContent = `${dateStr} · trend needs another weigh-in`;
