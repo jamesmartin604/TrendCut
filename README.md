@@ -45,6 +45,31 @@ examples/       # runnable demos (simulate/smoothing/tdee/plateau _demo.py)
 tests/          # pytest + hypothesis suite
 ```
 
+### Multi-user readiness (Phase 1)
+
+The storage layer is **user-scoped**, even though the app is still single-user in
+practice. Every row belongs to a user:
+
+* `users` — one row per user (minimal for now: `id` + `created_at`; identity/auth
+  columns come in Phase 2).
+* `entries` — primary key `(user_id, date)`; `settings` — one row per `user_id`.
+* Foreign keys are enforced (`PRAGMA foreign_keys = ON`), so an entry or settings
+  row can never reference a non-existent user.
+
+Every `Storage` method takes an explicit `user_id` — there is no hidden default in
+the storage layer. The HTTP surface stays single-user by resolving one implicit
+user at a single seam: **`get_current_user_id()` in [`api/app.py`](api/app.py)** is
+the **Phase-2 auth insertion point**. Today it returns the seeded default user
+(`DEFAULT_USER_ID = 1`); Phase 2 replaces only that function's body with real
+authentication — handlers and storage already thread `user_id`, so nothing else
+changes. The estimator (`estimator/`) remains user-agnostic: storage fetches one
+user's series and passes it in exactly as before.
+
+A legacy single-user database is migrated **in place on first startup**: the
+`entries`/`settings` tables are rebuilt to the composite-PK schema and every
+existing row is backfilled to `DEFAULT_USER_ID`, inside one transaction (rolled
+back on any failure). The migration is idempotent — re-running is a no-op.
+
 ## Development setup
 
 Requires Python 3.12+.
@@ -280,6 +305,20 @@ GitHub Actions secret, which **you** populate (nothing secret is committed):
   stays put. Fly health-checks `GET /health` before sending traffic.
 
 You can also deploy by hand at any time with `fly deploy`.
+
+> **Snapshot the volume before deploying the multi-user-readiness release.** The
+> first boot of that version runs a one-time, in-place schema migration on the live
+> `/data/trendcut.db` (rebuilding `entries`/`settings` to the user-scoped schema).
+> It is transactional and idempotent, but take a fresh snapshot first so a rollback
+> is trivial if anything looks wrong:
+> ```bash
+> fly volumes list                     # find the volume id
+> fly volumes snapshots create <volume-id>
+> ```
+> Before running any manual migration/inspection against the file, make sure
+> **nothing else holds it open** (a stray `--reload` process, DB Browser, an
+> editor's SQLite extension) — a second writer is the usual cause of
+> `database is locked`. Inspect with DB Browser in **read-only** mode.
 
 ### Backups and restore
 

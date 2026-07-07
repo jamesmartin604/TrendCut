@@ -4,14 +4,23 @@ Deliberately framework-free: this module knows nothing about HTTP and can be
 tested directly (see ``tests/test_storage.py``). The route handlers delegate all
 persistence here.
 
-Schema (PRD §9.1):
+Schema (multi-user-ready — Phase 1):
 
-* ``entries`` — one row per calendar day, ``date`` (ISO ``YYYY-MM-DD``) is the
-  primary key. ``weight_kg`` and ``kcal`` are independently nullable (you may log
-  a weigh-in without food, or vice versa). Re-logging a date **upserts** (updates
-  in place), never duplicates. ``created_at`` is preserved across upserts;
-  ``updated_at`` moves.
-* ``settings`` — a single row (``id = 1``) holding the estimator/plan knobs.
+* ``users`` — one row per user; minimal for now (``id`` PK + ``created_at``).
+  Identity/email/auth columns are Phase 2. A single default user (``id =
+  DEFAULT_USER_ID``) is seeded so the current single-user surface is unchanged.
+* ``entries`` — one row per (user, calendar day). Composite primary key
+  ``(user_id, date)`` (ISO ``YYYY-MM-DD``). ``weight_kg`` and ``kcal`` are
+  independently nullable (you may log a weigh-in without food, or vice versa).
+  Re-logging a date **upserts** (updates in place), never duplicates.
+  ``created_at`` is preserved across upserts; ``updated_at`` moves.
+* ``settings`` — one row per user (``user_id`` PK), holding the estimator/plan
+  knobs.
+
+Every storage method takes an explicit ``user_id`` — there is no hidden default
+inside this layer; the caller (the API's ``get_current_user_id`` seam) supplies
+it. This keeps the module honestly multi-tenant while the HTTP surface stays
+single-user for now.
 
 Nothing derived (trend/TDEE/plateau) is ever stored; those are recomputed from
 ``entries`` on demand.
@@ -24,7 +33,12 @@ import threading
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
-__all__ = ["Entry", "Settings", "Storage"]
+__all__ = ["DEFAULT_USER_ID", "Entry", "Settings", "Storage"]
+
+# The implicit user for the (still single-user) HTTP surface. Phase 1 seeds and
+# backfills everything to this id; Phase 2's auth replaces the API seam that
+# resolves it, not this constant's role as "the original account".
+DEFAULT_USER_ID = 1
 
 
 @dataclass(frozen=True)
@@ -47,7 +61,7 @@ class Settings:
     units: str
 
 
-# Defaults for the single settings row. window_days = 28 because a 14-day window
+# Defaults for a user's settings row. window_days = 28 because a 14-day window
 # (the PRD's nominal default) is too short to recover TDEE within ~100 kcal; 28 is
 # the smallest window that does (see estimator recovery tests). All are editable.
 _DEFAULT_SETTINGS = Settings(
@@ -86,22 +100,166 @@ class Storage:
         # of raising "database is locked" immediately.
         self._conn = sqlite3.connect(db_path, check_same_thread=False, timeout=30.0)
         self._conn.row_factory = sqlite3.Row
+        # Enforce foreign keys (off by default in sqlite3) so an entry/settings row
+        # can never reference a non-existent user. MUST run outside any transaction
+        # — SQLite silently ignores this pragma mid-transaction — so it is set here,
+        # before _init_schema opens the migration's BEGIN IMMEDIATE.
+        self._conn.execute("PRAGMA foreign_keys = ON")
         self._lock = threading.Lock()
         self._init_schema()
 
+    # --- schema / migration ------------------------------------------------ #
     def _init_schema(self) -> None:
+        """Create the schema, or migrate an old single-user DB in place.
+
+        Three cases, all idempotent (safe to run on every startup):
+
+        * fresh DB — create the user-scoped tables and seed the default user;
+        * already migrated — ensure the default user + its settings exist, done;
+        * legacy DB (``entries`` has no ``user_id``) — rebuild to the composite-PK
+          schema, backfilling every existing row to ``DEFAULT_USER_ID``.
+        """
         with self._lock:
-            self._conn.executescript(
+            if not self._table_exists("entries"):
+                self._create_fresh_schema()
+            elif "user_id" not in self._columns("entries"):
+                self._migrate_to_user_scoped()
+            else:
+                self._ensure_default_user()
+            self._conn.commit()
+
+    def _table_exists(self, name: str) -> bool:
+        row = self._conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?", (name,)
+        ).fetchone()
+        return row is not None
+
+    def _columns(self, table: str) -> set[str]:
+        return {r["name"] for r in self._conn.execute(f"PRAGMA table_info({table})").fetchall()}
+
+    def _create_fresh_schema(self) -> None:
+        """Brand-new DB: create user-scoped tables and seed the default user."""
+        self._conn.executescript(
+            """
+            CREATE TABLE users (
+                id         INTEGER PRIMARY KEY,
+                created_at TEXT NOT NULL
+            );
+            CREATE TABLE entries (
+                user_id    INTEGER NOT NULL REFERENCES users(id),
+                date       TEXT NOT NULL,
+                weight_kg  REAL,
+                kcal       INTEGER,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                PRIMARY KEY (user_id, date)
+            );
+            CREATE TABLE settings (
+                user_id               INTEGER PRIMARY KEY REFERENCES users(id),
+                alpha                 REAL NOT NULL,
+                window_days           INTEGER NOT NULL,
+                energy_density        REAL NOT NULL,
+                expected_deficit_kcal REAL NOT NULL,
+                target_weight         REAL,
+                target_date           TEXT,
+                units                 TEXT NOT NULL
+            );
+            """
+        )
+        self._ensure_default_user()
+
+    def _ensure_default_user(self) -> None:
+        """Seed ``DEFAULT_USER_ID`` and its default settings if missing (idempotent)."""
+        exists = self._conn.execute(
+            "SELECT 1 FROM users WHERE id = ?", (DEFAULT_USER_ID,)
+        ).fetchone()
+        if exists is None:
+            self._conn.execute(
+                "INSERT INTO users (id, created_at) VALUES (?, ?)", (DEFAULT_USER_ID, _now())
+            )
+        self._insert_default_settings_if_missing(DEFAULT_USER_ID)
+
+    def _insert_default_settings_if_missing(self, user_id: int) -> None:
+        exists = self._conn.execute(
+            "SELECT 1 FROM settings WHERE user_id = ?", (user_id,)
+        ).fetchone()
+        if exists is None:
+            d = _DEFAULT_SETTINGS
+            self._conn.execute(
+                "INSERT INTO settings (user_id, alpha, window_days, energy_density, "
+                "expected_deficit_kcal, target_weight, target_date, units) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    user_id,
+                    d.alpha,
+                    d.window_days,
+                    d.energy_density,
+                    d.expected_deficit_kcal,
+                    d.target_weight,
+                    d.target_date,
+                    d.units,
+                ),
+            )
+
+    def _migrate_to_user_scoped(self) -> None:
+        """Rebuild a legacy single-user DB into the composite-PK schema.
+
+        SQLite cannot ALTER a primary key, so each table is rebuilt (create-new,
+        copy, drop-old, rename) — the standard "table rebuild" recipe. Everything
+        runs in one explicit ``BEGIN IMMEDIATE`` transaction: transactional DDL
+        means a failure anywhere rolls the whole thing back and the original DB is
+        untouched (this project has been bitten by half-applied writes before). We
+        grab the write lock up front (IMMEDIATE) so we fail fast rather than
+        mid-rebuild if another connection holds it. All existing rows are
+        attributed to ``DEFAULT_USER_ID``; a row-count check guards against silent
+        data loss before we drop the originals.
+        """
+        conn = self._conn
+        now = _now()
+        conn.execute("BEGIN IMMEDIATE")
+        try:
+            entries_before = conn.execute("SELECT COUNT(*) FROM entries").fetchone()[0]
+            had_settings = (
+                conn.execute("SELECT COUNT(*) FROM settings WHERE id = 1").fetchone()[0] > 0
+            )
+
+            conn.execute("CREATE TABLE users (id INTEGER PRIMARY KEY, created_at TEXT NOT NULL)")
+            conn.execute("INSERT INTO users (id, created_at) VALUES (?, ?)", (DEFAULT_USER_ID, now))
+
+            # entries: rebuild with the composite PK, backfilling user_id.
+            conn.execute(
                 """
-                CREATE TABLE IF NOT EXISTS entries (
-                    date       TEXT PRIMARY KEY,
+                CREATE TABLE entries_new (
+                    user_id    INTEGER NOT NULL REFERENCES users(id),
+                    date       TEXT NOT NULL,
                     weight_kg  REAL,
                     kcal       INTEGER,
                     created_at TEXT NOT NULL,
-                    updated_at TEXT NOT NULL
-                );
-                CREATE TABLE IF NOT EXISTS settings (
-                    id                    INTEGER PRIMARY KEY CHECK (id = 1),
+                    updated_at TEXT NOT NULL,
+                    PRIMARY KEY (user_id, date)
+                )
+                """
+            )
+            conn.execute(
+                """
+                INSERT INTO entries_new (user_id, date, weight_kg, kcal, created_at, updated_at)
+                SELECT ?, date, weight_kg, kcal, created_at, updated_at FROM entries
+                """,
+                (DEFAULT_USER_ID,),
+            )
+            entries_after = conn.execute("SELECT COUNT(*) FROM entries_new").fetchone()[0]
+            if entries_after != entries_before:
+                raise RuntimeError(
+                    f"migration lost rows: entries {entries_before} -> {entries_after}"
+                )
+            conn.execute("DROP TABLE entries")
+            conn.execute("ALTER TABLE entries_new RENAME TO entries")
+
+            # settings: single id=1 row becomes one row per user, keyed by user_id.
+            conn.execute(
+                """
+                CREATE TABLE settings_new (
+                    user_id               INTEGER PRIMARY KEY REFERENCES users(id),
                     alpha                 REAL NOT NULL,
                     window_days           INTEGER NOT NULL,
                     energy_density        REAL NOT NULL,
@@ -109,49 +267,74 @@ class Storage:
                     target_weight         REAL,
                     target_date           TEXT,
                     units                 TEXT NOT NULL
-                );
+                )
                 """
             )
-            row = self._conn.execute("SELECT 1 FROM settings WHERE id = 1").fetchone()
-            if row is None:
-                d = _DEFAULT_SETTINGS
-                self._conn.execute(
-                    "INSERT INTO settings (id, alpha, window_days, energy_density, "
-                    "expected_deficit_kcal, target_weight, target_date, units) "
-                    "VALUES (1, ?, ?, ?, ?, ?, ?, ?)",
-                    (
-                        d.alpha,
-                        d.window_days,
-                        d.energy_density,
-                        d.expected_deficit_kcal,
-                        d.target_weight,
-                        d.target_date,
-                        d.units,
-                    ),
-                )
+            conn.execute(
+                """
+                INSERT INTO settings_new (user_id, alpha, window_days, energy_density,
+                    expected_deficit_kcal, target_weight, target_date, units)
+                SELECT ?, alpha, window_days, energy_density,
+                    expected_deficit_kcal, target_weight, target_date, units
+                FROM settings WHERE id = 1
+                """,
+                (DEFAULT_USER_ID,),
+            )
+            conn.execute("DROP TABLE settings")
+            conn.execute("ALTER TABLE settings_new RENAME TO settings")
+            # A legacy DB should always have had its settings row, but if somehow
+            # not, seed defaults so the default user is never left without settings.
+            if not had_settings:
+                self._insert_default_settings_if_missing(DEFAULT_USER_ID)
+
+            # Belt-and-braces: no dangling references survived the rebuild.
+            violations = conn.execute("PRAGMA foreign_key_check").fetchall()
+            if violations:
+                raise RuntimeError(f"migration left FK violations: {violations!r}")
+
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+
+    # --- users ------------------------------------------------------------- #
+    def create_user(self) -> int:
+        """Create a new user (with default settings) and return its id.
+
+        Phase 1 has no auth, so this is used by tests to prove per-user isolation;
+        Phase 2's signup will call it behind the auth seam. The default user keeps
+        ``id = DEFAULT_USER_ID``; additional users autoincrement above it.
+        """
+        with self._lock:
+            cur = self._conn.execute("INSERT INTO users (created_at) VALUES (?)", (_now(),))
+            user_id = int(cur.lastrowid)
+            self._insert_default_settings_if_missing(user_id)
             self._conn.commit()
+        return user_id
 
     # --- entries ----------------------------------------------------------- #
-    def upsert_entry(self, date: str, weight_kg: float | None, kcal: int | None) -> Entry:
-        """Insert or overwrite the entry for ``date`` (created_at preserved)."""
+    def upsert_entry(
+        self, user_id: int, date: str, weight_kg: float | None, kcal: int | None
+    ) -> Entry:
+        """Insert or overwrite this user's entry for ``date`` (created_at preserved)."""
         now = _now()
         with self._lock:
             self._conn.execute(
                 """
-                INSERT INTO entries (date, weight_kg, kcal, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?)
-                ON CONFLICT(date) DO UPDATE SET
+                INSERT INTO entries (user_id, date, weight_kg, kcal, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT(user_id, date) DO UPDATE SET
                     weight_kg  = excluded.weight_kg,
                     kcal       = excluded.kcal,
                     updated_at = excluded.updated_at
                 """,
-                (date, weight_kg, kcal, now, now),
+                (user_id, date, weight_kg, kcal, now, now),
             )
             self._conn.commit()
-        return self.get_entry(date)  # type: ignore[return-value]
+        return self.get_entry(user_id, date)  # type: ignore[return-value]
 
-    def upsert_entries(self, rows: list[tuple[str, float | None, int | None]]) -> int:
-        """Upsert many ``(date, weight_kg, kcal)`` rows in ONE transaction.
+    def upsert_entries(self, user_id: int, rows: list[tuple[str, float | None, int | None]]) -> int:
+        """Upsert many ``(date, weight_kg, kcal)`` rows for one user in ONE transaction.
 
         The bulk-import path. One BEGIN…COMMIT for the whole batch instead of a
         transaction per row: the per-row commits gave any other connection on the
@@ -160,18 +343,18 @@ class Storage:
         **atomic** — on any failure it rolls back and the DB is unchanged (rows the
         parser skipped never reach this method, so good rows in a file with bad
         rows still import; only an infrastructure failure mid-write rolls back).
-        Per-row semantics are identical to :meth:`upsert_entry`: upsert by date,
-        ``created_at`` preserved, ``updated_at`` moved.
+        Per-row semantics are identical to :meth:`upsert_entry`: upsert by
+        ``(user_id, date)``, ``created_at`` preserved, ``updated_at`` moved.
         """
         now = _now()
-        params = [(date, weight_kg, kcal, now, now) for date, weight_kg, kcal in rows]
+        params = [(user_id, date, weight_kg, kcal, now, now) for date, weight_kg, kcal in rows]
         with self._lock:
             try:
                 self._conn.executemany(
                     """
-                    INSERT INTO entries (date, weight_kg, kcal, created_at, updated_at)
-                    VALUES (?, ?, ?, ?, ?)
-                    ON CONFLICT(date) DO UPDATE SET
+                    INSERT INTO entries (user_id, date, weight_kg, kcal, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(user_id, date) DO UPDATE SET
                         weight_kg  = excluded.weight_kg,
                         kcal       = excluded.kcal,
                         updated_at = excluded.updated_at
@@ -184,37 +367,48 @@ class Storage:
                 raise
         return len(params)
 
-    def get_entry(self, date: str) -> Entry | None:
+    def get_entry(self, user_id: int, date: str) -> Entry | None:
         # Reads take the lock too: the connection is shared across the threadpool
         # FastAPI runs sync handlers in, and unsynchronized concurrent fetches on
         # one sqlite3 connection corrupt each other's results.
         with self._lock:
-            row = self._conn.execute("SELECT * FROM entries WHERE date = ?", (date,)).fetchone()
+            row = self._conn.execute(
+                "SELECT * FROM entries WHERE user_id = ? AND date = ?", (user_id, date)
+            ).fetchone()
         return _row_to_entry(row) if row is not None else None
 
-    def list_entries(self, start: str | None = None, end: str | None = None) -> list[Entry]:
-        """All entries (ordered by date), optionally restricted to [start, end]."""
+    def list_entries(
+        self, user_id: int, start: str | None = None, end: str | None = None
+    ) -> list[Entry]:
+        """This user's entries (ordered by date), optionally restricted to [start, end]."""
         with self._lock:
             if start is not None and end is not None:
                 rows = self._conn.execute(
-                    "SELECT * FROM entries WHERE date BETWEEN ? AND ? ORDER BY date",
-                    (start, end),
+                    "SELECT * FROM entries WHERE user_id = ? AND date BETWEEN ? AND ? "
+                    "ORDER BY date",
+                    (user_id, start, end),
                 ).fetchall()
             else:
-                rows = self._conn.execute("SELECT * FROM entries ORDER BY date").fetchall()
+                rows = self._conn.execute(
+                    "SELECT * FROM entries WHERE user_id = ? ORDER BY date", (user_id,)
+                ).fetchall()
         return [_row_to_entry(r) for r in rows]
 
-    def delete_entry(self, date: str) -> bool:
-        """Delete the entry; return True if a row was removed."""
+    def delete_entry(self, user_id: int, date: str) -> bool:
+        """Delete this user's entry; return True if a row was removed."""
         with self._lock:
-            cur = self._conn.execute("DELETE FROM entries WHERE date = ?", (date,))
+            cur = self._conn.execute(
+                "DELETE FROM entries WHERE user_id = ? AND date = ?", (user_id, date)
+            )
             self._conn.commit()
         return cur.rowcount > 0
 
     # --- settings ---------------------------------------------------------- #
-    def get_settings(self) -> Settings:
+    def get_settings(self, user_id: int) -> Settings:
         with self._lock:
-            row = self._conn.execute("SELECT * FROM settings WHERE id = 1").fetchone()
+            row = self._conn.execute(
+                "SELECT * FROM settings WHERE user_id = ?", (user_id,)
+            ).fetchone()
         return Settings(
             alpha=row["alpha"],
             window_days=row["window_days"],
@@ -225,18 +419,18 @@ class Storage:
             units=row["units"],
         )
 
-    def update_settings(self, **fields: object) -> Settings:
+    def update_settings(self, user_id: int, **fields: object) -> Settings:
         """Partial update; only recognised keys with non-None values are applied."""
         updates = {k: v for k, v in fields.items() if k in _SETTINGS_FIELDS and v is not None}
         if updates:
             assignments = ", ".join(f"{k} = ?" for k in updates)
             with self._lock:
                 self._conn.execute(
-                    f"UPDATE settings SET {assignments} WHERE id = 1",
-                    tuple(updates.values()),
+                    f"UPDATE settings SET {assignments} WHERE user_id = ?",
+                    (*updates.values(), user_id),
                 )
                 self._conn.commit()
-        return self.get_settings()
+        return self.get_settings(user_id)
 
     def close(self) -> None:
         self._conn.close()

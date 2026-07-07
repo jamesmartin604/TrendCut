@@ -1,0 +1,148 @@
+"""Migration test: legacy single-user DB -> user-scoped schema (Phase 1).
+
+The live DB on Fly holds real data, so the in-place migration in
+:meth:`api.storage.Storage._init_schema` must lose nothing and attribute every
+existing row to the default user. These tests build a pre-migration DB with raw
+``sqlite3`` (the *old* schema — ``entries`` keyed by ``date``, single ``settings``
+row), open :class:`Storage` on it (which triggers the migration), and assert the
+result is complete, correctly attributed, structurally correct, and idempotent.
+"""
+
+from __future__ import annotations
+
+import sqlite3
+
+import pytest
+
+from api.storage import DEFAULT_USER_ID, Storage
+
+# The old (pre-Phase-1) schema, verbatim, so the migration is exercised against
+# exactly what the live DB looks like today.
+_OLD_SCHEMA = """
+CREATE TABLE entries (
+    date       TEXT PRIMARY KEY,
+    weight_kg  REAL,
+    kcal       INTEGER,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+CREATE TABLE settings (
+    id                    INTEGER PRIMARY KEY CHECK (id = 1),
+    alpha                 REAL NOT NULL,
+    window_days           INTEGER NOT NULL,
+    energy_density        REAL NOT NULL,
+    expected_deficit_kcal REAL NOT NULL,
+    target_weight         REAL,
+    target_date           TEXT,
+    units                 TEXT NOT NULL
+);
+"""
+
+# A few entries incl. a weight-only and a calorie-only day, and a *customised*
+# settings row (units='lb', window_days=14, a target) — so the test proves values
+# are carried across, not silently reset to defaults.
+_OLD_ENTRIES = [
+    ("2026-01-01", 80.0, 2000, "2026-01-01T08:00:00+00:00", "2026-01-01T08:00:00+00:00"),
+    ("2026-01-02", 79.8, None, "2026-01-02T08:00:00+00:00", "2026-01-02T08:00:00+00:00"),
+    ("2026-01-03", None, 1850, "2026-01-03T08:00:00+00:00", "2026-01-03T08:00:00+00:00"),
+]
+_OLD_SETTINGS = (0.15, 14, 7700.0, 250.0, 75.0, "2026-08-31", "lb")
+
+
+def _make_legacy_db(path: str) -> None:
+    conn = sqlite3.connect(path)
+    try:
+        conn.executescript(_OLD_SCHEMA)
+        conn.executemany(
+            "INSERT INTO entries (date, weight_kg, kcal, created_at, updated_at) "
+            "VALUES (?, ?, ?, ?, ?)",
+            _OLD_ENTRIES,
+        )
+        conn.execute(
+            "INSERT INTO settings (id, alpha, window_days, energy_density, "
+            "expected_deficit_kcal, target_weight, target_date, units) "
+            "VALUES (1, ?, ?, ?, ?, ?, ?, ?)",
+            _OLD_SETTINGS,
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+@pytest.fixture
+def legacy_db_path(tmp_path) -> str:
+    path = str(tmp_path / "legacy.db")
+    _make_legacy_db(path)
+    return path
+
+
+def test_migration_preserves_all_entries_for_default_user(legacy_db_path: str) -> None:
+    store = Storage(legacy_db_path)
+    try:
+        entries = store.list_entries(DEFAULT_USER_ID)
+        # Every legacy row survives, values intact, attributed to the default user.
+        assert [e.date for e in entries] == ["2026-01-01", "2026-01-02", "2026-01-03"]
+        assert entries[0].weight_kg == 80.0 and entries[0].kcal == 2000
+        assert entries[1].weight_kg == 79.8 and entries[1].kcal is None
+        assert entries[2].weight_kg is None and entries[2].kcal == 1850
+        # Timestamps are carried across unchanged (not reset to migration time).
+        assert entries[0].created_at == "2026-01-01T08:00:00+00:00"
+    finally:
+        store.close()
+
+
+def test_migration_preserves_settings_values(legacy_db_path: str) -> None:
+    store = Storage(legacy_db_path)
+    try:
+        s = store.get_settings(DEFAULT_USER_ID)
+        # The customised legacy settings are carried over verbatim — NOT the defaults.
+        assert s.alpha == 0.15
+        assert s.window_days == 14
+        assert s.target_weight == 75.0
+        assert s.target_date == "2026-08-31"
+        assert s.units == "lb"
+    finally:
+        store.close()
+
+
+def test_migration_produces_composite_primary_key(legacy_db_path: str) -> None:
+    store = Storage(legacy_db_path)
+    try:
+        conn = store._conn  # noqa: SLF001 - inspecting schema shape is the point
+        cols = conn.execute("PRAGMA table_info(entries)").fetchall()
+        # Both user_id and date are part of the PK (pk > 0), date second.
+        pk = {r["name"]: r["pk"] for r in cols if r["pk"] > 0}
+        assert pk == {"user_id": 1, "date": 2}
+        # users table exists and holds exactly the default user.
+        user_ids = [r["id"] for r in conn.execute("SELECT id FROM users").fetchall()]
+        assert user_ids == [DEFAULT_USER_ID]
+    finally:
+        store.close()
+
+
+def test_migration_is_idempotent(legacy_db_path: str) -> None:
+    # First open migrates; second open must be a no-op (already user-scoped).
+    first = Storage(legacy_db_path)
+    first_dates = [e.date for e in first.list_entries(DEFAULT_USER_ID)]
+    first.close()
+
+    second = Storage(legacy_db_path)
+    try:
+        assert [e.date for e in second.list_entries(DEFAULT_USER_ID)] == first_dates
+        assert second.get_settings(DEFAULT_USER_ID).units == "lb"
+        # Still exactly one user; migration didn't duplicate anything.
+        count = second._conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]  # noqa: SLF001
+        assert count == 1
+    finally:
+        second.close()
+
+
+def test_migrated_db_enforces_foreign_keys(legacy_db_path: str) -> None:
+    """After migration the FK is live: an orphan entry is rejected on the real
+    (file-backed) DB, not just in-memory."""
+    store = Storage(legacy_db_path)
+    try:
+        with pytest.raises(sqlite3.IntegrityError):
+            store.upsert_entry(9999, "2026-02-01", 70.0, 1800)
+    finally:
+        store.close()

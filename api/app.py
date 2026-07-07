@@ -35,7 +35,19 @@ from api.models import (
     SettingsUpdate,
     TdeeHistoryResponse,
 )
-from api.storage import Entry, Storage
+from api.storage import DEFAULT_USER_ID, Entry, Storage
+
+
+def get_current_user_id() -> int:
+    """Resolve the user making this request.
+
+    PHASE-2 AUTH INSERTION POINT. The storage layer is fully user-scoped, but the
+    HTTP surface is still single-user, so every request is attributed to the
+    seeded default user. Phase 2 replaces ONLY this dependency's body with real
+    authentication (session/token -> user id); no handler or storage change is
+    needed because they already thread ``user_id`` explicitly.
+    """
+    return DEFAULT_USER_ID
 
 
 def _validate_date(date: str) -> str:
@@ -91,21 +103,25 @@ def create_app(storage: Storage | None = None) -> FastAPI:
     # ``/entries/import`` and ``/entries/export`` paths match first (FastAPI matches
     # routes in declaration order; otherwise ``{date}`` would capture "export").
     @app.post("/entries/import", response_model=ImportResult)
-    async def import_csv(request: Request, store: Storage = Depends(get_storage)) -> ImportResult:
+    async def import_csv(
+        request: Request,
+        store: Storage = Depends(get_storage),
+        user_id: int = Depends(get_current_user_id),
+    ) -> ImportResult:
         text = (await request.body()).decode("utf-8-sig")
         # The user's display-units setting resolves a unit-less weight header (the
         # parser warns whenever that assumption is used).
-        rows, warnings = parse_entries_csv(text, assumed_units=store.get_settings().units)
+        rows, warnings = parse_entries_csv(text, assumed_units=store.get_settings(user_id).units)
         # Import upserts, so a date that already exists gets overwritten — count
         # those before writing and surface it (the UI warns pre-commit; this
         # confirms what actually happened).
-        existing = {e.date for e in store.list_entries()}
+        existing = {e.date for e in store.list_entries(user_id)}
         overwritten = len({row.date for row in rows} & existing)
         for row in rows:
             warnings.extend(f"{row.date}: {w}" for w in entry_warnings(row.weight_kg, row.kcal))
         # All rows in ONE transaction (atomic, and no per-row commit churn — the
         # per-row upsert loop was the "database is locked" trigger on import).
-        store.upsert_entries([(row.date, row.weight_kg, row.kcal) for row in rows])
+        store.upsert_entries(user_id, [(row.date, row.weight_kg, row.kcal) for row in rows])
         if overwritten:
             warnings.append(
                 f"{overwritten} existing entr{'y was' if overwritten == 1 else 'ies were'} "
@@ -114,8 +130,12 @@ def create_app(storage: Storage | None = None) -> FastAPI:
         return ImportResult(imported=len(rows), warnings=warnings)
 
     @app.get("/entries/export")
-    def export(format: str = "csv", store: Storage = Depends(get_storage)) -> Response:
-        entries = store.list_entries()
+    def export(
+        format: str = "csv",
+        store: Storage = Depends(get_storage),
+        user_id: int = Depends(get_current_user_id),
+    ) -> Response:
+        entries = store.list_entries(user_id)
         if format == "json":
             return JSONResponse(content=entries_to_json(entries))
         if format == "csv":
@@ -125,17 +145,24 @@ def create_app(storage: Storage | None = None) -> FastAPI:
     # --- entries ----------------------------------------------------------- #
     @app.put("/entries/{date}", response_model=EntryResponse)
     def upsert_entry(
-        date: str, body: EntryUpsert, store: Storage = Depends(get_storage)
+        date: str,
+        body: EntryUpsert,
+        store: Storage = Depends(get_storage),
+        user_id: int = Depends(get_current_user_id),
     ) -> EntryResponse:
         iso = _validate_date(date)
         warnings = entry_warnings(body.weight_kg, body.kcal)
-        entry = store.upsert_entry(iso, body.weight_kg, body.kcal)
+        entry = store.upsert_entry(user_id, iso, body.weight_kg, body.kcal)
         return _entry_response(entry, warnings)
 
     @app.get("/entries/{date}", response_model=EntryResponse)
-    def get_entry(date: str, store: Storage = Depends(get_storage)) -> EntryResponse:
+    def get_entry(
+        date: str,
+        store: Storage = Depends(get_storage),
+        user_id: int = Depends(get_current_user_id),
+    ) -> EntryResponse:
         iso = _validate_date(date)
-        entry = store.get_entry(iso)
+        entry = store.get_entry(user_id, iso)
         if entry is None:
             raise HTTPException(status_code=404, detail=f"no entry for {iso}")
         return _entry_response(entry)
@@ -145,39 +172,55 @@ def create_app(storage: Storage | None = None) -> FastAPI:
         start: str | None = None,
         end: str | None = None,
         store: Storage = Depends(get_storage),
+        user_id: int = Depends(get_current_user_id),
     ) -> list[EntryResponse]:
         start_iso = _validate_date(start) if start else None
         end_iso = _validate_date(end) if end else None
-        entries = store.list_entries(start_iso, end_iso)
+        entries = store.list_entries(user_id, start_iso, end_iso)
         return [_entry_response(e) for e in entries]
 
     @app.delete("/entries/{date}")
-    def delete_entry(date: str, store: Storage = Depends(get_storage)) -> Response:
+    def delete_entry(
+        date: str,
+        store: Storage = Depends(get_storage),
+        user_id: int = Depends(get_current_user_id),
+    ) -> Response:
         iso = _validate_date(date)
-        if not store.delete_entry(iso):
+        if not store.delete_entry(user_id, iso):
             raise HTTPException(status_code=404, detail=f"no entry for {iso}")
         return Response(status_code=204)
 
     # --- settings ---------------------------------------------------------- #
     @app.get("/settings", response_model=SettingsResponse)
-    def get_settings(store: Storage = Depends(get_storage)) -> SettingsResponse:
-        return SettingsResponse(**vars(store.get_settings()))
+    def get_settings(
+        store: Storage = Depends(get_storage),
+        user_id: int = Depends(get_current_user_id),
+    ) -> SettingsResponse:
+        return SettingsResponse(**vars(store.get_settings(user_id)))
 
     @app.put("/settings", response_model=SettingsResponse)
     def update_settings(
-        body: SettingsUpdate, store: Storage = Depends(get_storage)
+        body: SettingsUpdate,
+        store: Storage = Depends(get_storage),
+        user_id: int = Depends(get_current_user_id),
     ) -> SettingsResponse:
-        updated = store.update_settings(**body.model_dump(exclude_unset=True))
+        updated = store.update_settings(user_id, **body.model_dump(exclude_unset=True))
         return SettingsResponse(**vars(updated))
 
     # --- estimate (pure read + compute; never stored) ---------------------- #
     @app.get("/estimate", response_model=EstimateResponse)
-    def estimate(store: Storage = Depends(get_storage)) -> EstimateResponse:
-        return compute_estimate(store.list_entries(), store.get_settings())
+    def estimate(
+        store: Storage = Depends(get_storage),
+        user_id: int = Depends(get_current_user_id),
+    ) -> EstimateResponse:
+        return compute_estimate(store.list_entries(user_id), store.get_settings(user_id))
 
     @app.get("/tdee-history", response_model=TdeeHistoryResponse)
-    def tdee_history(store: Storage = Depends(get_storage)) -> TdeeHistoryResponse:
-        return compute_tdee_history(store.list_entries(), store.get_settings())
+    def tdee_history(
+        store: Storage = Depends(get_storage),
+        user_id: int = Depends(get_current_user_id),
+    ) -> TdeeHistoryResponse:
+        return compute_tdee_history(store.list_entries(user_id), store.get_settings(user_id))
 
     # --- health ------------------------------------------------------------- #
     # Liveness probe for the deploy platform (Fly). Trivial 200 + JSON; touches no
