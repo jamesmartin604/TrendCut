@@ -23,31 +23,54 @@ from fastapi.responses import JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.types import Scope
 
+from api.auth import (
+    SESSION_COOKIE,
+    SESSION_TTL_DAYS,
+    hash_token,
+    new_session_token,
+    session_expiry,
+    verify_password,
+)
 from api.csv_io import entries_to_csv, entries_to_json, parse_entries_csv
 from api.estimation import compute_estimate, compute_tdee_history
 from api.guards import entry_warnings
 from api.models import (
+    AuthMeResponse,
     EntryResponse,
     EntryUpsert,
     EstimateResponse,
     ImportResult,
+    LoginRequest,
     SettingsResponse,
     SettingsUpdate,
     TdeeHistoryResponse,
 )
-from api.storage import DEFAULT_USER_ID, Entry, Storage
+from api.storage import Entry, Storage
 
 
-def get_current_user_id() -> int:
-    """Resolve the user making this request.
+def _now_iso() -> str:
+    return _dt.datetime.now(_dt.UTC).isoformat()
 
-    PHASE-2 AUTH INSERTION POINT. The storage layer is fully user-scoped, but the
-    HTTP surface is still single-user, so every request is attributed to the
-    seeded default user. Phase 2 replaces ONLY this dependency's body with real
-    authentication (session/token -> user id); no handler or storage change is
-    needed because they already thread ``user_id`` explicitly.
+
+def get_storage(request: Request) -> Storage:
+    """Dependency: the app's Storage instance (overridden in tests)."""
+    return request.app.state.storage
+
+
+def get_current_user_id(request: Request, store: Storage = Depends(get_storage)) -> int:
+    """Resolve the authenticated user from the session cookie, or raise 401.
+
+    This is the auth seam Phase 1 set up: every data route depends on it and
+    already threads the returned ``user_id`` through storage, so authentication is
+    concentrated here. The cookie carries an opaque token; only its SHA-256 hash is
+    stored, so we hash the presented token and look up a non-expired session.
     """
-    return DEFAULT_USER_ID
+    token = request.cookies.get(SESSION_COOKIE)
+    if token:
+        user_id = store.get_session_user_id(hash_token(token), _now_iso())
+        if user_id is not None:
+            return user_id
+    raise HTTPException(status_code=401, detail="Not authenticated")
 
 
 def _validate_date(date: str) -> str:
@@ -70,11 +93,6 @@ def _entry_response(entry: Entry, warnings: list[str] | None = None) -> EntryRes
     )
 
 
-def get_storage(request: Request) -> Storage:
-    """Dependency: the app's Storage instance (overridden in tests)."""
-    return request.app.state.storage
-
-
 class _NoCacheStaticFiles(StaticFiles):
     """Serve the frontend with ``Cache-Control: no-cache``.
 
@@ -92,11 +110,89 @@ class _NoCacheStaticFiles(StaticFiles):
         return response
 
 
-def create_app(storage: Storage | None = None) -> FastAPI:
+def _resolve_cookie_secure(cookie_secure: bool | None) -> bool:
+    """Whether the session cookie gets the ``Secure`` flag.
+
+    Defaults to secure (production-safe). Local dev over plain HTTP must relax it
+    (a ``Secure`` cookie is never sent over http://localhost, so login would appear
+    to "not work") via ``cookie_secure=False`` or ``TRENDCUT_COOKIE_SECURE=0``. This
+    is an explicit switch rather than sniffing the request scheme, so a
+    misconfigured proxy can't silently drop ``Secure`` in production.
+    """
+    if cookie_secure is not None:
+        return cookie_secure
+    return os.environ.get("TRENDCUT_COOKIE_SECURE", "1").strip().lower() not in {
+        "0",
+        "false",
+        "no",
+    }
+
+
+def create_app(storage: Storage | None = None, *, cookie_secure: bool | None = None) -> FastAPI:
     """Build the app. Pass a Storage (e.g. in-memory) for tests; otherwise one is
-    created from the ``TRENDCUT_DB`` env var (default ``trendcut.db``)."""
+    created from the ``TRENDCUT_DB`` env var (default ``trendcut.db``).
+
+    ``cookie_secure`` controls the session cookie's ``Secure`` flag (see
+    :func:`_resolve_cookie_secure`); tests and local HTTP dev pass ``False``.
+    """
     app = FastAPI(title="TrendCut API", version="0.1.0")
     app.state.storage = storage or Storage(os.environ.get("TRENDCUT_DB", "trendcut.db"))
+    cookie_secure = _resolve_cookie_secure(cookie_secure)
+
+    # --- auth -------------------------------------------------------------- #
+    # These routes must NOT depend on get_current_user_id (you can't require a
+    # session to log in). Registered before the static mount like every API route.
+    @app.post("/auth/login")
+    def login(
+        body: LoginRequest,
+        response: Response,
+        store: Storage = Depends(get_storage),
+    ) -> dict[str, bool]:
+        store.delete_expired_sessions(_now_iso())
+        user = store.get_user_by_email(body.email)
+        # Constant-time: verify_password runs a dummy argon2 verify when there is no
+        # user / no hash, so an unknown email and a wrong password are
+        # indistinguishable by timing. The error text is identical either way — no
+        # account-existence oracle.
+        password_hash = user.password_hash if user is not None else None
+        if not verify_password(password_hash, body.password):
+            raise HTTPException(status_code=401, detail="Invalid email or password")
+        token = new_session_token()
+        store.create_session(hash_token(token), user.id, session_expiry())
+        response.set_cookie(
+            SESSION_COOKIE,
+            token,
+            max_age=SESSION_TTL_DAYS * 24 * 60 * 60,
+            httponly=True,
+            secure=cookie_secure,
+            samesite="lax",
+            path="/",
+        )
+        return {"ok": True}
+
+    @app.post("/auth/logout")
+    def logout(
+        request: Request,
+        response: Response,
+        store: Storage = Depends(get_storage),
+    ) -> dict[str, bool]:
+        token = request.cookies.get(SESSION_COOKIE)
+        if token:
+            store.delete_session(hash_token(token))
+        store.delete_expired_sessions(_now_iso())
+        response.delete_cookie(SESSION_COOKIE, path="/")
+        return {"ok": True}
+
+    @app.get("/auth/me", response_model=AuthMeResponse)
+    def auth_me(request: Request, store: Storage = Depends(get_storage)) -> AuthMeResponse:
+        # Intentionally does NOT 401 — it's the frontend's is-logged-in probe.
+        token = request.cookies.get(SESSION_COOKIE)
+        if token:
+            user_id = store.get_session_user_id(hash_token(token), _now_iso())
+            if user_id is not None:
+                user = store.get_user(user_id)
+                return AuthMeResponse(authenticated=True, email=user.email if user else None)
+        return AuthMeResponse(authenticated=False)
 
     # --- CSV import / export ---------------------------------------------- #
     # Registered before the parametrised ``/entries/{date}`` routes so the literal

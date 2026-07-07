@@ -16,6 +16,10 @@ Schema (multi-user-ready — Phase 1):
   ``created_at`` is preserved across upserts; ``updated_at`` moves.
 * ``settings`` — one row per user (``user_id`` PK), holding the estimator/plan
   knobs.
+* ``users`` also carries ``email`` (UNIQUE via index; NULL until claimed) and
+  ``password_hash`` for authentication (Phase 2).
+* ``sessions`` — opaque login sessions: ``token_hash`` (SHA-256 of the cookie
+  token, never the raw token) PK, ``user_id``, ``created_at``, ``expires_at``.
 
 Every storage method takes an explicit ``user_id`` — there is no hidden default
 inside this layer; the caller (the API's ``get_current_user_id`` seam) supplies
@@ -33,7 +37,7 @@ import threading
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
-__all__ = ["DEFAULT_USER_ID", "Entry", "Settings", "Storage"]
+__all__ = ["DEFAULT_USER_ID", "Entry", "Settings", "Storage", "User"]
 
 # The implicit user for the (still single-user) HTTP surface. Phase 1 seeds and
 # backfills everything to this id; Phase 2's auth replaces the API seam that
@@ -48,6 +52,14 @@ class Entry:
     kcal: int | None
     created_at: str
     updated_at: str
+
+
+@dataclass(frozen=True)
+class User:
+    id: int
+    email: str | None  # NULL until credentials are attached (bootstrap claims user 1)
+    password_hash: str | None  # argon2id string; NULL for an uncredentialed user
+    created_at: str
 
 
 @dataclass(frozen=True)
@@ -118,6 +130,10 @@ class Storage:
         * already migrated — ensure the default user + its settings exist, done;
         * legacy DB (``entries`` has no ``user_id``) — rebuild to the composite-PK
           schema, backfilling every existing row to ``DEFAULT_USER_ID``.
+
+        Then, independently, :meth:`_ensure_auth_schema` adds the Phase-2 auth
+        columns and ``sessions`` table if they are missing (a Phase-1 DB already has
+        user scoping but not auth).
         """
         with self._lock:
             if not self._table_exists("entries"):
@@ -126,7 +142,10 @@ class Storage:
                 self._migrate_to_user_scoped()
             else:
                 self._ensure_default_user()
+            # Flush the base-schema work (and close any implicit transaction) before
+            # the auth migration opens its own BEGIN IMMEDIATE.
             self._conn.commit()
+            self._ensure_auth_schema()
 
     def _table_exists(self, name: str) -> bool:
         row = self._conn.execute(
@@ -142,9 +161,12 @@ class Storage:
         self._conn.executescript(
             """
             CREATE TABLE users (
-                id         INTEGER PRIMARY KEY,
-                created_at TEXT NOT NULL
+                id            INTEGER PRIMARY KEY,
+                email         TEXT,
+                password_hash TEXT,
+                created_at    TEXT NOT NULL
             );
+            CREATE UNIQUE INDEX idx_users_email ON users(email);
             CREATE TABLE entries (
                 user_id    INTEGER NOT NULL REFERENCES users(id),
                 date       TEXT NOT NULL,
@@ -163,6 +185,12 @@ class Storage:
                 target_weight         REAL,
                 target_date           TEXT,
                 units                 TEXT NOT NULL
+            );
+            CREATE TABLE sessions (
+                token_hash TEXT PRIMARY KEY,
+                user_id    INTEGER NOT NULL REFERENCES users(id),
+                created_at TEXT NOT NULL,
+                expires_at TEXT NOT NULL
             );
             """
         )
@@ -297,6 +325,39 @@ class Storage:
             conn.rollback()
             raise
 
+    def _ensure_auth_schema(self) -> None:
+        """Add the Phase-2 auth columns and ``sessions`` table if missing (idempotent).
+
+        Only nullable columns are added, so a plain ``ALTER TABLE ADD COLUMN`` is
+        enough — no table rebuild. ``email`` gets a UNIQUE *index* (not an inline
+        UNIQUE constraint, which ``ADD COLUMN`` cannot express); a unique index lets
+        multiple NULLs coexist, so uncredentialed users (incl. the pre-bootstrap
+        user 1) are fine while any real email stays unique. Wrapped in one
+        transaction with rollback, like the Phase-1 migration.
+        """
+        if "email" in self._columns("users"):
+            return
+        conn = self._conn
+        conn.execute("BEGIN IMMEDIATE")
+        try:
+            conn.execute("ALTER TABLE users ADD COLUMN email TEXT")
+            conn.execute("ALTER TABLE users ADD COLUMN password_hash TEXT")
+            conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users(email)")
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS sessions (
+                    token_hash TEXT PRIMARY KEY,
+                    user_id    INTEGER NOT NULL REFERENCES users(id),
+                    created_at TEXT NOT NULL,
+                    expires_at TEXT NOT NULL
+                )
+                """
+            )
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+
     # --- users ------------------------------------------------------------- #
     def create_user(self) -> int:
         """Create a new user (with default settings) and return its id.
@@ -311,6 +372,88 @@ class Storage:
             self._insert_default_settings_if_missing(user_id)
             self._conn.commit()
         return user_id
+
+    def get_user(self, user_id: int) -> User | None:
+        with self._lock:
+            row = self._conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+        return _row_to_user(row) if row is not None else None
+
+    def get_user_by_email(self, email: str) -> User | None:
+        """The user with this email, or None. Email uniqueness is index-enforced."""
+        with self._lock:
+            row = self._conn.execute("SELECT * FROM users WHERE email = ?", (email,)).fetchone()
+        return _row_to_user(row) if row is not None else None
+
+    def find_uncredentialed_user_id(self) -> int | None:
+        """The lowest-id user without credentials (e.g. the pre-bootstrap user 1),
+        or None. This is the account the bootstrap CLI claims so existing data is
+        preserved rather than orphaned under a brand-new user."""
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT id FROM users WHERE email IS NULL ORDER BY id LIMIT 1"
+            ).fetchone()
+        return int(row["id"]) if row is not None else None
+
+    def set_user_credentials(self, user_id: int, email: str, password_hash: str) -> None:
+        """Attach credentials to an existing user (claim). Raises
+        :class:`sqlite3.IntegrityError` if the email is already taken."""
+        with self._lock:
+            self._conn.execute(
+                "UPDATE users SET email = ?, password_hash = ? WHERE id = ?",
+                (email, password_hash, user_id),
+            )
+            self._conn.commit()
+
+    def create_credentialed_user(self, email: str, password_hash: str) -> int:
+        """Create a new user with credentials (+ default settings); return its id.
+        Raises :class:`sqlite3.IntegrityError` if the email is already taken."""
+        now = _now()
+        with self._lock:
+            cur = self._conn.execute(
+                "INSERT INTO users (email, password_hash, created_at) VALUES (?, ?, ?)",
+                (email, password_hash, now),
+            )
+            user_id = int(cur.lastrowid)
+            self._insert_default_settings_if_missing(user_id)
+            self._conn.commit()
+        return user_id
+
+    # --- sessions ---------------------------------------------------------- #
+    def create_session(self, token_hash: str, user_id: int, expires_at: str) -> None:
+        """Persist a session. ``token_hash`` is the SHA-256 of the cookie token —
+        the raw token is never stored, so a DB leak yields no usable sessions."""
+        with self._lock:
+            self._conn.execute(
+                "INSERT INTO sessions (token_hash, user_id, created_at, expires_at) "
+                "VALUES (?, ?, ?, ?)",
+                (token_hash, user_id, _now(), expires_at),
+            )
+            self._conn.commit()
+
+    def get_session_user_id(self, token_hash: str, now: str) -> int | None:
+        """The user for a live (non-expired) session, or None. ``now`` is an ISO
+        timestamp; a session with ``expires_at <= now`` is treated as absent."""
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT user_id FROM sessions WHERE token_hash = ? AND expires_at > ?",
+                (token_hash, now),
+            ).fetchone()
+        return int(row["user_id"]) if row is not None else None
+
+    def delete_session(self, token_hash: str) -> bool:
+        """Remove a session (logout). Returns True if one existed."""
+        with self._lock:
+            cur = self._conn.execute("DELETE FROM sessions WHERE token_hash = ?", (token_hash,))
+            self._conn.commit()
+        return cur.rowcount > 0
+
+    def delete_expired_sessions(self, now: str) -> int:
+        """Purge sessions with ``expires_at <= now``; return how many were removed.
+        Called opportunistically on login/logout to keep the table from growing."""
+        with self._lock:
+            cur = self._conn.execute("DELETE FROM sessions WHERE expires_at <= ?", (now,))
+            self._conn.commit()
+        return cur.rowcount
 
     # --- entries ----------------------------------------------------------- #
     def upsert_entry(
@@ -434,6 +577,15 @@ class Storage:
 
     def close(self) -> None:
         self._conn.close()
+
+
+def _row_to_user(row: sqlite3.Row) -> User:
+    return User(
+        id=row["id"],
+        email=row["email"],
+        password_hash=row["password_hash"],
+        created_at=row["created_at"],
+    )
 
 
 def _row_to_entry(row: sqlite3.Row) -> Entry:

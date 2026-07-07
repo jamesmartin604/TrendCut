@@ -15,6 +15,7 @@ dependencies = [
     "numpy",
     "fastapi",
     "uvicorn",
+    "argon2-cffi",  # password hashing (argon2id) for the auth layer
 ]
 
 [project.optional-dependencies]

@@ -45,30 +45,32 @@ examples/       # runnable demos (simulate/smoothing/tdee/plateau _demo.py)
 tests/          # pytest + hypothesis suite
 ```
 
-### Multi-user readiness (Phase 1)
+### Multi-user architecture
 
-The storage layer is **user-scoped**, even though the app is still single-user in
-practice. Every row belongs to a user:
+The storage layer is fully **user-scoped** and, as of Phase 2, guarded by real
+authentication. Every row belongs to a user:
 
-* `users` — one row per user (minimal for now: `id` + `created_at`; identity/auth
-  columns come in Phase 2).
-* `entries` — primary key `(user_id, date)`; `settings` — one row per `user_id`.
-* Foreign keys are enforced (`PRAGMA foreign_keys = ON`), so an entry or settings
-  row can never reference a non-existent user.
+* `users` — `id`, `created_at`, and (Phase 2) `email` + `password_hash` (both NULL
+  until an account is bootstrapped).
+* `entries` — primary key `(user_id, date)`; `settings` — one row per `user_id`;
+  `sessions` — opaque login sessions keyed by the token's SHA-256 hash.
+* Foreign keys are enforced (`PRAGMA foreign_keys = ON`), so an entry, settings, or
+  session row can never reference a non-existent user.
 
 Every `Storage` method takes an explicit `user_id` — there is no hidden default in
-the storage layer. The HTTP surface stays single-user by resolving one implicit
-user at a single seam: **`get_current_user_id()` in [`api/app.py`](api/app.py)** is
-the **Phase-2 auth insertion point**. Today it returns the seeded default user
-(`DEFAULT_USER_ID = 1`); Phase 2 replaces only that function's body with real
-authentication — handlers and storage already thread `user_id`, so nothing else
-changes. The estimator (`estimator/`) remains user-agnostic: storage fetches one
-user's series and passes it in exactly as before.
+the storage layer. The request's user is resolved at a single seam:
+**`get_current_user_id()` in [`api/app.py`](api/app.py)** reads the session cookie
+and returns the authenticated user, or raises `401`. Handlers and storage already
+thread `user_id`, and the estimator (`estimator/`) stays user-agnostic: storage
+fetches one user's series and passes it in exactly as before. See
+**[Authentication](#authentication)** for the session model and how to bootstrap an
+account; open self-service registration is the next phase.
 
-A legacy single-user database is migrated **in place on first startup**: the
-`entries`/`settings` tables are rebuilt to the composite-PK schema and every
-existing row is backfilled to `DEFAULT_USER_ID`, inside one transaction (rolled
-back on any failure). The migration is idempotent — re-running is a no-op.
+The database is migrated **in place on first startup**, idempotently and inside one
+rolled-back-on-failure transaction: a pre-user-scoping DB has its `entries`/
+`settings` rebuilt to the composite-PK schema (existing rows backfilled to
+`DEFAULT_USER_ID`), and a pre-auth DB gains the `email`/`password_hash` columns and
+`sessions` table.
 
 ## Development setup
 
@@ -179,12 +181,58 @@ Key endpoints:
 | `GET /tdee-history`      | Rolling TDEE estimate recomputed as-of each past day (drift series) |
 | `POST /entries/import`   | Bulk-upsert a CSV body — tolerant flat-CSV parsing (see format below) |
 | `GET /entries/export?format=csv\|json` | Dump all entries                                 |
+| `POST /auth/login`       | Email + password → sets the session cookie                     |
+| `POST /auth/logout`      | Invalidate the session and clear the cookie                    |
+| `GET /auth/me`           | Is-authenticated probe (never 401s) for the frontend           |
+
+All data routes above require a valid session (a missing/expired session → `401`);
+only `/auth/*` and `/health` are reachable unauthenticated. See **Authentication** below.
 
 **Derived, never stored.** Trend weight, TDEE, and the plateau verdict are
 recomputed from raw entries on every `/estimate` call — editing or deleting history
 always yields a consistent result. The estimator honestly reports
 `insufficient_data` / `low_confidence` rather than inventing a number; the API
 surfaces those statuses unchanged.
+
+## Authentication
+
+Every data route requires a logged-in session; there is no anonymous access. The
+mechanism is deliberately self-host-friendly — **email + password with an opaque
+server-side session token in a cookie** — so a cloned repo works with zero external
+services (no OAuth provider, no email/SMTP, no JWT signing keys).
+
+**Bootstrap the first account.** There is no public self-service signup yet (that
+is the next phase). Attach credentials to an account with the management command,
+run against the same database the app uses (`TRENDCUT_DB`):
+
+```bash
+python -m api.bootstrap_user --email you@example.com          # prompts for the password
+```
+
+If an uncredentialed account exists — the user carried over from before auth — the
+command **claims it in place**, preserving all its entries and settings; otherwise
+it creates a new account. It refuses to overwrite an already-credentialed email.
+
+**Session model.** On login the server generates a random token, stores only its
+**SHA-256 hash** (a DB leak yields no usable sessions), and sets it in a cookie that
+is `HttpOnly`, `SameSite=Lax`, `Path=/`, and `Secure`. Sessions have a **fixed
+30-day** lifetime (not sliding) and are revocable — logout deletes the row and
+clears the cookie; expired sessions are purged on login/logout. An expired, missing,
+or invalid session returns `401`, and the frontend redirects to `/login.html`.
+
+**Local dev over HTTP.** A `Secure` cookie is never sent over plain
+`http://localhost`, so for local development relax it with `TRENDCUT_COOKIE_SECURE=0`
+(or `create_app(cookie_secure=False)` in tests). This is an explicit switch — the
+app never infers it from the request scheme, so a misconfigured proxy can't silently
+drop `Secure` in production.
+
+**Security posture.** Passwords are hashed with argon2id (never stored, logged, or
+returned). Login returns one generic message whether the email is unknown or the
+password is wrong, and runs a constant-time dummy verification on the unknown-email
+path so timing can't reveal which accounts exist. **CSRF:** the app is same-origin
+and the session cookie is `SameSite=Lax`, which covers cross-site form POSTs for
+now; a dedicated CSRF token is a documented later consideration, not part of this
+phase. Basic brute-force throttling / lockout is likewise a later phase.
 
 ### CSV import format
 
@@ -255,6 +303,7 @@ Every knob has a sensible default, so the app runs with no configuration at all.
 | Variable | Default | Purpose |
 |----------|---------|---------|
 | `TRENDCUT_DB` | `trendcut.db` | Path to the SQLite file. In the container this is `/data/trendcut.db`, on the mounted volume. |
+| `TRENDCUT_COOKIE_SECURE` | `1` (secure) | Session-cookie `Secure` flag. Set to `0` for local dev over plain HTTP (a `Secure` cookie isn't sent over `http://localhost`). Leave secure in production. |
 | `HOST` | `0.0.0.0` | Interface uvicorn binds (used by the container start command). |
 | `PORT` | `8080` | Port uvicorn binds (matches Fly's `internal_port`). |
 

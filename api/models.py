@@ -5,10 +5,12 @@ from __future__ import annotations
 from pydantic import BaseModel
 
 __all__ = [
+    "AuthMeResponse",
     "EntryResponse",
     "EntryUpsert",
     "EstimateResponse",
     "ImportResult",
+    "LoginRequest",
     "PlateauResult",
     "SettingsResponse",
     "SettingsUpdate",
@@ -17,6 +19,16 @@ __all__ = [
     "TdeeResult",
     "TrendPoint",
 ]
+
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+
+class AuthMeResponse(BaseModel):
+    authenticated: bool
+    email: str | None = None
 
 
 class EntryUpsert(BaseModel):

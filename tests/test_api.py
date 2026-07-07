@@ -22,15 +22,28 @@ import pytest
 from fastapi.testclient import TestClient
 
 from api.app import create_app
+from api.bootstrap_user import bootstrap
 from api.storage import Storage
 from estimator.synthetic import simulate
+
+# Auth is live as of Phase 2, so the data routes now require a session. The default
+# client is authenticated: it claims the default user with credentials and logs in,
+# and the TestClient carries the session cookie through every subsequent request —
+# so the existing data-route tests exercise exactly the same behaviour as before,
+# just as an authenticated user. (cookie_secure=False so the cookie survives over
+# TestClient's plain-http transport.)
+_TEST_EMAIL = "user@test.local"
+_TEST_PASSWORD = "correct horse battery staple"
 
 
 @pytest.fixture
 def client() -> TestClient:
     storage = Storage(":memory:")
-    app = create_app(storage)
+    bootstrap(storage, _TEST_EMAIL, _TEST_PASSWORD)
+    app = create_app(storage, cookie_secure=False)
     with TestClient(app) as c:
+        r = c.post("/auth/login", json={"email": _TEST_EMAIL, "password": _TEST_PASSWORD})
+        assert r.status_code == 200, r.text
         yield c
     storage.close()
 

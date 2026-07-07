@@ -3,8 +3,27 @@
  * Same-origin (the API serves this frontend), so no base URL / CORS concerns.
  */
 
+import { redirectToLogin } from "./auth.js";
+
+/**
+ * A 401 means the session is missing or expired: send the user to login rather
+ * than surfacing an error on a page they can no longer load. Centralised here so
+ * every data call inherits it. Returns true if it handled (redirected).
+ */
+function handleUnauthorized(res) {
+  if (res.status === 401) {
+    redirectToLogin();
+    return true;
+  }
+  return false;
+}
+
 async function asJson(res) {
   if (!res.ok) {
+    if (handleUnauthorized(res)) {
+      // Stall the returned promise; the page is navigating away anyway.
+      return new Promise(() => {});
+    }
     let detail = `${res.status} ${res.statusText}`;
     try {
       const body = await res.json();
@@ -76,6 +95,7 @@ export function listEntries() {
 /** DELETE /entries/{date} — permanently remove a day. Resolves on 204. */
 export async function deleteEntry(date) {
   const res = await fetch(`/entries/${date}`, { method: "DELETE" });
+  if (handleUnauthorized(res)) return new Promise(() => {});
   if (!res.ok && res.status !== 204) {
     throw new Error(`${res.status} ${res.statusText}`);
   }

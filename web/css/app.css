@@ -1391,3 +1391,44 @@ body {
     grid-template-columns: repeat(3, 1fr);
   }
 }
+
+/* ---------- Auth (login) ---------- */
+.auth-page {
+  min-height: 70vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.auth-card {
+  width: 100%;
+  max-width: 380px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--stack-gap, 16px);
+}
+
+.auth-title {
+  font-size: 20px;
+  line-height: 26px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.auth-subtitle {
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
+.auth-card .btn-primary {
+  width: 100%;
+  padding: 12px 24px;
+}
+
+/* Logout control at the right of the top bar. The nav's auto right margin already
+   pushes trailing items to the edge; this just spaces it from a sibling button. */
+.topbar-logout {
+  margin-left: 16px;
+}

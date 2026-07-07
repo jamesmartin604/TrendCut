@@ -146,3 +146,77 @@ def test_migrated_db_enforces_foreign_keys(legacy_db_path: str) -> None:
             store.upsert_entry(9999, "2026-02-01", 70.0, 1800)
     finally:
         store.close()
+
+
+# --- Phase-2 auth migration ----------------------------------------------- #
+# A legacy DB migrates through BOTH steps at once (user-scoping then auth); a
+# Phase-1 DB (already user-scoped, no auth columns) exercises just the auth step.
+def test_legacy_db_gains_auth_schema(legacy_db_path: str) -> None:
+    store = Storage(legacy_db_path)
+    try:
+        conn = store._conn  # noqa: SLF001
+        user_cols = {r["name"] for r in conn.execute("PRAGMA table_info(users)")}
+        assert {"email", "password_hash"} <= user_cols
+        # sessions table exists and the pre-bootstrap user stays uncredentialed.
+        assert (
+            conn.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='sessions'"
+            ).fetchone()
+            is not None
+        )
+        user = store.get_user(DEFAULT_USER_ID)
+        assert user.email is None and user.password_hash is None
+    finally:
+        store.close()
+
+
+def _make_phase1_db(path: str) -> None:
+    """A Phase-1-shaped DB: user-scoped (composite PK) but no auth columns."""
+    conn = sqlite3.connect(path)
+    try:
+        conn.executescript(
+            """
+            CREATE TABLE users (id INTEGER PRIMARY KEY, created_at TEXT NOT NULL);
+            CREATE TABLE entries (
+                user_id INTEGER NOT NULL REFERENCES users(id), date TEXT NOT NULL,
+                weight_kg REAL, kcal INTEGER, created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
+                PRIMARY KEY (user_id, date));
+            CREATE TABLE settings (
+                user_id INTEGER PRIMARY KEY REFERENCES users(id), alpha REAL NOT NULL,
+                window_days INTEGER NOT NULL, energy_density REAL NOT NULL,
+                expected_deficit_kcal REAL NOT NULL, target_weight REAL, target_date TEXT,
+                units TEXT NOT NULL);
+            INSERT INTO users VALUES (1, '2026-01-01T00:00:00+00:00');
+            INSERT INTO settings VALUES (1, 0.1, 21, 7700.0, 300.0, NULL, NULL, 'kg');
+            INSERT INTO entries VALUES (1, '2026-01-01', 80.0, 2000, 't', 't');
+            INSERT INTO entries VALUES (1, '2026-01-02', 79.8, NULL, 't', 't');
+            """
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def test_phase1_db_gains_auth_schema_without_data_loss(tmp_path) -> None:
+    path = str(tmp_path / "phase1.db")
+    _make_phase1_db(path)
+
+    store = Storage(path)
+    try:
+        # Auth columns + sessions added; existing entries/settings untouched.
+        assert len(store.list_entries(DEFAULT_USER_ID)) == 2
+        assert store.get_settings(DEFAULT_USER_ID).window_days == 21
+        assert store.find_uncredentialed_user_id() == DEFAULT_USER_ID
+        # And the new auth machinery works on the upgraded DB.
+        store.set_user_credentials(DEFAULT_USER_ID, "u@test.local", "hash")
+        assert store.get_user_by_email("u@test.local").id == DEFAULT_USER_ID
+    finally:
+        store.close()
+
+    # Idempotent: re-opening the already-upgraded DB is a no-op.
+    again = Storage(path)
+    try:
+        assert len(again.list_entries(DEFAULT_USER_ID)) == 2
+        assert again.get_user_by_email("u@test.local") is not None
+    finally:
+        again.close()
