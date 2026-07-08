@@ -9,7 +9,8 @@
  * save (same discipline as the log-entry guards).
  */
 
-import { getSettings, updateSettings } from "./api.js";
+import { getSettings, importEntries, updateSettings } from "./api.js";
+import { importResultMessage } from "./onboarding.js";
 import { formatWeight, toKg, unitLabel } from "./units.js";
 
 const $ = (id) => document.getElementById(id);
@@ -213,13 +214,7 @@ async function runImport() {
   btn.disabled = true;
   btn.textContent = "Importing…";
   try {
-    const res = await fetch("/entries/import", {
-      method: "POST",
-      headers: { "Content-Type": "text/csv" },
-      body: text,
-    });
-    if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
-    renderImportResult(await res.json());
+    renderImportResult(await importEntries(text));
   } catch (err) {
     $("import-error").textContent = `Import failed: ${err.message}. Nothing may have been saved — check History.`;
     $("import-error").hidden = false;
@@ -233,23 +228,21 @@ async function runImport() {
 /**
  * Show the endpoint's ImportResult inline: the imported count as the headline, and
  * every warning (skipped rows + why, unit assumption, overwrite count) verbatim —
- * the warnings are the honest record of what the tolerant parser did.
+ * the warnings are the honest record of what the tolerant parser did. The count and
+ * warning mapping are shared with the dashboard onboarding import (importResultMessage).
  */
 function renderImportResult(result) {
-  const summary = $("import-summary");
-  const warnEl = $("import-warnings");
-  if (result.imported === 0) {
-    $("import-error").textContent = "Nothing was imported.";
-    $("import-error").hidden = false;
+  const { ok, summary, warnings } = importResultMessage(result);
+  if (ok) {
+    $("import-summary").textContent = summary;
+    $("import-summary").hidden = false;
   } else {
-    summary.textContent =
-      `Imported ${result.imported} ${result.imported === 1 ? "entry" : "entries"}. ` +
-      "The Dashboard and History recompute from the new data on their next load.";
-    summary.hidden = false;
+    $("import-error").textContent = summary;
+    $("import-error").hidden = false;
   }
-  if (result.warnings.length > 0) {
-    warnEl.innerHTML = result.warnings.map((w) => `<span>${escapeHtml(w)}</span>`).join("");
-    warnEl.hidden = false;
+  if (warnings.length > 0) {
+    $("import-warnings").innerHTML = warnings.map((w) => `<span>${escapeHtml(w)}</span>`).join("");
+    $("import-warnings").hidden = false;
   }
 }
 

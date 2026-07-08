@@ -54,6 +54,24 @@ export function getSettings() {
   return fetch("/settings").then(asJson);
 }
 
+/** GET /estimate/requirements — the estimator's minimum-data bar (for onboarding). */
+export function getRequirements() {
+  return fetch("/estimate/requirements").then(asJson);
+}
+
+/**
+ * POST /entries/import — bulk-upsert a CSV body. Returns the ImportResult
+ * ({ imported, warnings }). The server matches rows by date (an existing date is
+ * overwritten); callers confirm that with the user before calling this.
+ */
+export function importEntries(csvText) {
+  return fetch("/entries/import", {
+    method: "POST",
+    headers: { "Content-Type": "text/csv" },
+    body: csvText,
+  }).then(asJson);
+}
+
 /**
  * PUT /settings — partial update of the estimator/plan knobs (α, window, target
  * weight/date, units, …). Only the keys present are changed. Returns the full

@@ -361,6 +361,29 @@ def test_import_surfaces_guard_warnings(client: TestClient) -> None:
     assert any("plausible range" in w for w in result["warnings"])
 
 
+# --- onboarding: estimate requirements ------------------------------------ #
+def test_estimate_requirements_matches_estimator_and_needs_auth() -> None:
+    """The onboarding threshold endpoint must report the estimator's *effective*
+    minimums. Assert against the estimator's own constants (imported here), never a
+    hardcoded 10 — so if the estimator's bar changes, this test catches any drift
+    between it and what the onboarding UI tells users."""
+    from estimator.tdee import MIN_INTAKE_DAYS, MIN_WEIGHT_DAYS
+
+    storage = Storage(":memory:")
+    app = create_app(storage, cookie_secure=False)
+    with TestClient(app) as c:
+        # Auth-gated like the rest of the dashboard.
+        assert c.get("/estimate/requirements").status_code == 401
+        c.post("/auth/register", json={"email": "req@test.local", "password": "password123"})
+        r = c.get("/estimate/requirements")
+        assert r.status_code == 200
+        assert r.json() == {
+            "min_weight_days": MIN_WEIGHT_DAYS,
+            "min_intake_days": MIN_INTAKE_DAYS,
+        }
+    storage.close()
+
+
 # --- registration (public signup) ----------------------------------------- #
 def test_register_new_account_then_use_it() -> None:
     """Smoke test for the public /auth/register route: a fresh, unauthenticated

@@ -33,6 +33,45 @@
   <main class="page">
     <div class="page-error" id="page-error" hidden></div>
 
+    <!-- First-run onboarding: shown only until there's enough data for a real
+         estimate. Leads with importing history as the fast path. -->
+    <section class="card onboarding" id="onboarding" hidden>
+      <h1 class="onboarding-title" id="onboarding-title">Welcome to TrendCut</h1>
+      <p class="onboarding-lead" id="onboarding-lead"></p>
+
+      <p class="onboarding-progress" id="onboarding-progress" hidden></p>
+
+      <div class="onboarding-actions">
+        <button class="btn btn-primary" type="button" id="onboarding-import-btn">
+          Import your history (CSV)
+        </button>
+        <button class="btn btn-ghost" type="button" id="onboarding-log-btn">
+          Log today instead
+        </button>
+        <input type="file" id="onboarding-file" accept=".csv,text/csv" hidden />
+      </div>
+
+      <p class="onboarding-hint">
+        A flat CSV with a date and a weight column (calories optional) — most apps
+        export one. You can also import later from
+        <a href="/settings.html">Settings</a>.
+      </p>
+
+      <div class="form-warnings" id="onboarding-confirm" hidden>
+        <span id="onboarding-confirm-text"></span>
+        <div class="modal-actions">
+          <button class="btn btn-primary" type="button" id="onboarding-confirm-btn">
+            Import
+          </button>
+          <button class="btn btn-ghost" type="button" id="onboarding-cancel-btn">Cancel</button>
+        </div>
+      </div>
+
+      <p class="settings-hint" id="onboarding-summary" hidden></p>
+      <div class="form-warnings" id="onboarding-warnings" hidden></div>
+      <div class="form-error" id="onboarding-error" hidden></div>
+    </section>
+
     <!-- Hero: TDEE + pace -->
     <section class="hero-grid">
       <article class="card hero-card">

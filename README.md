@@ -179,6 +179,7 @@ Key endpoints:
 | `GET /settings` / `PUT /settings` | Read / partially update α, window, energy density, target, units |
 | `GET /estimate`          | Recompute trend + TDEE (point, CI, status) + plateau verdict   |
 | `GET /tdee-history`      | Rolling TDEE estimate recomputed as-of each past day (drift series) |
+| `GET /estimate/requirements` | The estimator's minimum-data bar (for honest onboarding copy) |
 | `POST /entries/import`   | Bulk-upsert a CSV body — tolerant flat-CSV parsing (see format below) |
 | `GET /entries/export?format=csv\|json` | Dump all entries                                 |
 | `POST /auth/register`    | Create an account (email + password), then auto-login          |
@@ -258,6 +259,31 @@ path so timing can't reveal which accounts exist. **CSRF:** the app is same-orig
 and the session cookie is `SameSite=Lax`, which covers cross-site form POSTs for
 now; a dedicated CSRF token is a documented later consideration, not part of this
 phase. Basic brute-force throttling / lockout is likewise a later phase.
+
+## Onboarding (first run)
+
+A brand-new account has no data, and TrendCut will **not** show a TDEE number until
+there's enough of it to be trustworthy — it shows an honest cold-start state
+instead of a fabricated estimate. The dashboard leads a low-data user with an
+onboarding card whose primary action is **importing your weight/calorie history**
+(the [CSV import](#csv-import-format) below) — the fastest path to a real estimate —
+with "log today" as the secondary option.
+
+The messaging is driven by the estimator's *actual* state, so the copy can't drift
+from the math:
+
+* With **no entries**, the card invites an import.
+* With **some data but not enough**, it shows your real progress — e.g. "you've
+  logged 9 of 10 weigh-in days and 9 of 10 intake days" — where the target (10) is
+  the estimator's own minimum, read live from `GET /estimate/requirements` (which
+  returns `estimator.tdee.MIN_WEIGHT_DAYS` / `MIN_INTAKE_DAYS`), never a hardcoded
+  number.
+* Once the estimator produces a real estimate (`ok` or `low_confidence`), the
+  onboarding card disappears and the normal dashboard stands on its own. An
+  established user never sees it.
+
+After an import the dashboard recomputes and either shows a real estimate (if enough
+was imported) or the honest "here's where you are, here's what's still needed" state.
 
 ### CSV import format
 

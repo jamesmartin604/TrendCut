@@ -8,10 +8,16 @@
  * flagged with its wide CI made prominent. No fallback TDEE is ever invented here.
  */
 
-import { getEstimate, getSettings } from "./api.js";
+import { getEstimate, getRequirements, getSettings, importEntries } from "./api.js";
 import { goalLineAnchors, nearestIndex } from "./chart-math.js";
 import { renderWeightChart } from "./chart.js";
 import { openEntryForm } from "./entry-form.js";
+import {
+  importResultMessage,
+  onboardingProgress,
+  onboardingProgressText,
+  onboardingState,
+} from "./onboarding.js";
 import { fluctuationNote, plateauLabel, tdeeHeroView } from "./status.js";
 import { formatWeight, fromKg, unitLabel } from "./units.js";
 
@@ -39,6 +45,7 @@ function writeGoalPref(on) {
 const state = {
   estimate: null,
   settings: null,
+  requirements: null, // estimator's minimum-data bar (for onboarding copy)
   range: "30", // chart range in days, or "all"
   chartGeometry: null, // hit-test geometry from the last chart render (tooltip)
   goalLine: readGoalPref(), // show the plan/goal line on the weight chart
@@ -477,9 +484,125 @@ function wireLogButtons() {
   $("open-log-fab").addEventListener("click", open);
 }
 
+// ---------- onboarding (first-run empty / low-data state) ---------- //
+
+function escapeHtml(s) {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+// CSV text held between file-pick and the explicit confirm click (import upserts
+// by date and can't be undone, so the POST never fires on selection alone).
+let pendingOnboardImport = null;
+
+function resetOnboardingImportUi() {
+  pendingOnboardImport = null;
+  $("onboarding-confirm").hidden = true;
+  $("onboarding-file").value = ""; // re-selecting the same file must re-fire `change`
+}
+
+function renderOnboarding() {
+  const section = $("onboarding");
+  const stateName = onboardingState(state.estimate);
+  if (stateName === "ready") {
+    section.hidden = true;
+    resetOnboardingImportUi();
+    return;
+  }
+  section.hidden = false;
+
+  const title = $("onboarding-title");
+  const lead = $("onboarding-lead");
+  const progress = $("onboarding-progress");
+  if (stateName === "empty") {
+    title.textContent = "Welcome to TrendCut";
+    lead.textContent =
+      "TrendCut estimates your real maintenance calories from your weight and intake — " +
+      "but only once there's enough consistent data to trust the number. Importing your " +
+      "history is the fastest way to a real estimate.";
+    progress.hidden = true;
+  } else {
+    // "building": some data, but the estimator still reports insufficient_data.
+    title.textContent = "You're on your way";
+    lead.textContent =
+      "Your estimate appears once there's enough consistent data — no fabricated number " +
+      "before then. Importing past history is the fastest way to get there.";
+    progress.textContent = onboardingProgressText(
+      onboardingProgress(state.estimate, state.requirements),
+    );
+    progress.hidden = false;
+  }
+}
+
+async function onOnboardingFilePicked(file) {
+  $("onboarding-summary").hidden = true;
+  $("onboarding-warnings").hidden = true;
+  $("onboarding-error").hidden = true;
+  if (!file) return;
+  try {
+    pendingOnboardImport = await file.text();
+  } catch (err) {
+    $("onboarding-error").textContent = `Couldn't read the file: ${err.message}`;
+    $("onboarding-error").hidden = false;
+    return;
+  }
+  $("onboarding-confirm-text").textContent =
+    `Import "${file.name}"? Rows are matched by date — a date you've already logged is ` +
+    "overwritten by the file's value, and there's no undo. New dates are added.";
+  $("onboarding-confirm").hidden = false;
+}
+
+async function runOnboardingImport() {
+  const btn = $("onboarding-confirm-btn");
+  btn.disabled = true;
+  btn.textContent = "Importing…";
+  try {
+    const result = await importEntries(pendingOnboardImport);
+    renderOnboardImportResult(result);
+    // Recompute the whole dashboard from the new data: this re-renders onboarding,
+    // which hides the panel automatically if there's now enough for a real estimate.
+    await refresh();
+  } catch (err) {
+    $("onboarding-error").textContent =
+      `Import failed: ${err.message}. Nothing may have been saved — check History.`;
+    $("onboarding-error").hidden = false;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Import";
+    resetOnboardingImportUi();
+  }
+}
+
+function renderOnboardImportResult(result) {
+  const { ok, summary, warnings } = importResultMessage(result);
+  if (ok) {
+    $("onboarding-summary").textContent = summary;
+    $("onboarding-summary").hidden = false;
+  } else {
+    $("onboarding-error").textContent = summary;
+    $("onboarding-error").hidden = false;
+  }
+  if (warnings.length > 0) {
+    $("onboarding-warnings").innerHTML = warnings
+      .map((w) => `<span>${escapeHtml(w)}</span>`)
+      .join("");
+    $("onboarding-warnings").hidden = false;
+  }
+}
+
+function wireOnboarding() {
+  $("onboarding-import-btn").addEventListener("click", () => $("onboarding-file").click());
+  $("onboarding-file").addEventListener("change", (e) => onOnboardingFilePicked(e.target.files[0]));
+  $("onboarding-confirm-btn").addEventListener("click", runOnboardingImport);
+  $("onboarding-cancel-btn").addEventListener("click", resetOnboardingImportUi);
+  $("onboarding-log-btn").addEventListener("click", () =>
+    openEntryForm({ date: todayIso(), units: units(), dateEditable: true, onSaved: refresh }),
+  );
+}
+
 // ---------- load + render ---------- //
 
 function renderAll() {
+  renderOnboarding();
   renderHero();
   renderPlateau();
   renderPace();
@@ -490,9 +613,14 @@ function renderAll() {
 }
 
 async function refresh() {
-  const [estimate, settings] = await Promise.all([getEstimate(), getSettings()]);
+  const [estimate, settings, requirements] = await Promise.all([
+    getEstimate(),
+    getSettings(),
+    getRequirements(),
+  ]);
   state.estimate = estimate;
   state.settings = settings;
+  state.requirements = requirements;
   renderAll();
 }
 
@@ -501,6 +629,7 @@ async function init() {
   wireRangeButtons();
   wireGoalToggle();
   wireChartTooltip();
+  wireOnboarding();
 
   // Redraw the chart when its box resizes (responsive, PRD §8).
   const chartEl = $("chart");

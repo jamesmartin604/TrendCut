@@ -8,6 +8,7 @@ __all__ = [
     "AuthMeResponse",
     "EntryResponse",
     "EntryUpsert",
+    "EstimateRequirements",
     "EstimateResponse",
     "ImportResult",
     "LoginRequest",
@@ -105,6 +106,17 @@ class PlateauResult(BaseModel):
     implied_deficit_kcal: float | None
     expected_deficit_kcal: float
     based_on_status: str
+
+
+class EstimateRequirements(BaseModel):
+    """The estimator's minimum data bar, surfaced for honest onboarding copy.
+
+    These are the real thresholds the estimator uses (not a hardcoded frontend
+    guess), so the "you have X of N days" message can never drift from the math.
+    """
+
+    min_weight_days: int
+    min_intake_days: int
 
 
 class EstimateResponse(BaseModel):

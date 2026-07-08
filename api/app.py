@@ -43,6 +43,7 @@ from api.models import (
     AuthMeResponse,
     EntryResponse,
     EntryUpsert,
+    EstimateRequirements,
     EstimateResponse,
     ImportResult,
     LoginRequest,
@@ -52,6 +53,14 @@ from api.models import (
     TdeeHistoryResponse,
 )
 from api.storage import Entry, Storage
+
+# The estimator's own minimum-data thresholds, surfaced read-only by
+# /estimate/requirements for honest onboarding copy. Imported straight from the
+# frozen estimator so the number the UI shows is the real bar. NOTE: this is only
+# accurate because api.estimation.compute_estimate does NOT override these when it
+# calls estimate_tdee — if it ever starts passing custom min_*_days, this endpoint
+# (and the onboarding copy it feeds) must be updated to match.
+from estimator.tdee import MIN_INTAKE_DAYS, MIN_WEIGHT_DAYS
 
 
 def _now_iso() -> str:
@@ -358,6 +367,17 @@ def create_app(storage: Storage | None = None, *, cookie_secure: bool | None = N
         user_id: int = Depends(get_current_user_id),
     ) -> TdeeHistoryResponse:
         return compute_tdee_history(store.list_entries(user_id), store.get_settings(user_id))
+
+    @app.get("/estimate/requirements", response_model=EstimateRequirements)
+    def estimate_requirements(
+        user_id: int = Depends(get_current_user_id),
+    ) -> EstimateRequirements:
+        # Static config (the estimator's minimum-data bar) — no per-user data, but
+        # auth-gated for consistency with the rest of the dashboard. Lets the
+        # onboarding UI say "you have X of N days" with N being the real threshold.
+        return EstimateRequirements(
+            min_weight_days=MIN_WEIGHT_DAYS, min_intake_days=MIN_INTAKE_DAYS
+        )
 
     # --- health ------------------------------------------------------------- #
     # Liveness probe for the deploy platform (Fly). Trivial 200 + JSON; touches no
