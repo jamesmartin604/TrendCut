@@ -406,16 +406,26 @@ class Storage:
 
     def create_credentialed_user(self, email: str, password_hash: str) -> int:
         """Create a new user with credentials (+ default settings); return its id.
-        Raises :class:`sqlite3.IntegrityError` if the email is already taken."""
+
+        The user row and its settings row are written **atomically** — both commit
+        together or neither does, so a failure (including a duplicate-email
+        ``IntegrityError`` from the UNIQUE index, which fires on the users insert)
+        can never leave a half-created account behind. On any error the batch is
+        rolled back and the exception propagates (the duplicate case is the caller's
+        registration guard)."""
         now = _now()
         with self._lock:
-            cur = self._conn.execute(
-                "INSERT INTO users (email, password_hash, created_at) VALUES (?, ?, ?)",
-                (email, password_hash, now),
-            )
-            user_id = int(cur.lastrowid)
-            self._insert_default_settings_if_missing(user_id)
-            self._conn.commit()
+            try:
+                cur = self._conn.execute(
+                    "INSERT INTO users (email, password_hash, created_at) VALUES (?, ?, ?)",
+                    (email, password_hash, now),
+                )
+                user_id = int(cur.lastrowid)
+                self._insert_default_settings_if_missing(user_id)
+                self._conn.commit()
+            except Exception:
+                self._conn.rollback()
+                raise
         return user_id
 
     # --- sessions ---------------------------------------------------------- #

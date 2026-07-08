@@ -27,12 +27,18 @@ from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError
 
 __all__ = [
+    "MAX_EMAIL_LENGTH",
+    "MAX_PASSWORD_LENGTH",
+    "MIN_PASSWORD_LENGTH",
     "SESSION_COOKIE",
     "SESSION_TTL_DAYS",
+    "RegistrationError",
     "hash_password",
     "hash_token",
     "new_session_token",
+    "normalize_email",
     "session_expiry",
+    "validate_registration",
     "verify_password",
 ]
 
@@ -42,6 +48,14 @@ SESSION_COOKIE = "trendcut_session"
 # Fixed (non-sliding) session lifetime. A session is valid for this long from
 # creation; re-login is required afterwards. Chosen fixed for simplicity this phase.
 SESSION_TTL_DAYS = 30
+
+# Registration input limits. Emails are unverified login handles, so validation is
+# deliberately light. The password *upper* bound matters for safety: argon2 hashes
+# the whole input, so an unbounded password is a cheap way to force expensive
+# hashing — cap it. 254 is the RFC 5321 max email length.
+MIN_PASSWORD_LENGTH = 8
+MAX_PASSWORD_LENGTH = 1024
+MAX_EMAIL_LENGTH = 254
 
 _ph = PasswordHasher()
 
@@ -97,3 +111,37 @@ def session_expiry(created: datetime | None = None) -> str:
     """ISO expiry timestamp ``SESSION_TTL_DAYS`` after ``created`` (default now)."""
     base = created if created is not None else _now()
     return (base + timedelta(days=SESSION_TTL_DAYS)).isoformat()
+
+
+def normalize_email(email: str) -> str:
+    """Canonical form for storage and lookup: trimmed and lowercased.
+
+    Applied consistently by registration, login, and the bootstrap CLI so that
+    ``Foo@X.com`` and ``foo@x.com`` resolve to the same account (casing/whitespace
+    can never mint a duplicate-looking account)."""
+    return email.strip().lower()
+
+
+class RegistrationError(ValueError):
+    """A human-readable registration-input rejection (maps to a 400)."""
+
+
+def validate_registration(email: str, password: str) -> str:
+    """Validate signup input; return the normalized email or raise RegistrationError.
+
+    Intentionally minimal — emails are unverified, so this only rejects the clearly
+    unusable (no ``@``, embedded whitespace, empty local/domain, over-length) rather
+    than trying to prove deliverability. This is the authoritative server-side
+    check; any client-side validation is UX only.
+    """
+    normalized = normalize_email(email)
+    local, sep, domain = normalized.partition("@")
+    if not sep or not local or not domain or any(ch.isspace() for ch in normalized):
+        raise RegistrationError("Enter a valid email address.")
+    if len(normalized) > MAX_EMAIL_LENGTH:
+        raise RegistrationError("That email address is too long.")
+    if len(password) < MIN_PASSWORD_LENGTH:
+        raise RegistrationError(f"Password must be at least {MIN_PASSWORD_LENGTH} characters.")
+    if len(password) > MAX_PASSWORD_LENGTH:
+        raise RegistrationError("That password is too long.")
+    return normalized

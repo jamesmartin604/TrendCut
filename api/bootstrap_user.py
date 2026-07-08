@@ -27,7 +27,7 @@ import getpass
 import os
 import sys
 
-from api.auth import hash_password
+from api.auth import hash_password, normalize_email
 from api.storage import Storage
 
 
@@ -41,7 +41,7 @@ def bootstrap(store: Storage, email: str, password: str) -> str:
     Raises :class:`BootstrapError` on a duplicate email or empty input, so callers
     can print a clean message and exit non-zero instead of dumping a traceback.
     """
-    email = email.strip()
+    email = normalize_email(email)
     if not email:
         raise BootstrapError("email must not be empty")
     if not password:

@@ -359,3 +359,21 @@ def test_import_surfaces_guard_warnings(client: TestClient) -> None:
     ).json()
     assert result["imported"] == 1
     assert any("plausible range" in w for w in result["warnings"])
+
+
+# --- registration (public signup) ----------------------------------------- #
+def test_register_new_account_then_use_it() -> None:
+    """Smoke test for the public /auth/register route: a fresh, unauthenticated
+    client can create an account and is immediately authenticated on the data
+    routes. (Uses its own storage so it doesn't depend on the pre-seeded fixture.)"""
+    storage = Storage(":memory:")
+    app = create_app(storage, cookie_secure=False)
+    with TestClient(app) as c:
+        # No session before signup.
+        assert c.get("/settings").status_code == 401
+        r = c.post("/auth/register", json={"email": "smoke@test.local", "password": "password123"})
+        assert r.status_code == 200
+        # Auto-logged-in: the data routes work and the account starts empty.
+        assert c.get("/settings").status_code == 200
+        assert c.get("/entries").json() == []
+    storage.close()

@@ -12,6 +12,7 @@ __all__ = [
     "ImportResult",
     "LoginRequest",
     "PlateauResult",
+    "RegisterRequest",
     "SettingsResponse",
     "SettingsUpdate",
     "TdeeHistoryPoint",
@@ -22,6 +23,11 @@ __all__ = [
 
 
 class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+
+class RegisterRequest(BaseModel):
     email: str
     password: str
 

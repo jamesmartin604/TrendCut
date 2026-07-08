@@ -63,8 +63,8 @@ the storage layer. The request's user is resolved at a single seam:
 and returns the authenticated user, or raises `401`. Handlers and storage already
 thread `user_id`, and the estimator (`estimator/`) stays user-agnostic: storage
 fetches one user's series and passes it in exactly as before. See
-**[Authentication](#authentication)** for the session model and how to bootstrap an
-account; open self-service registration is the next phase.
+**[Authentication](#authentication)** for the session model, open signup, and the
+CLI bootstrap.
 
 The database is migrated **in place on first startup**, idempotently and inside one
 rolled-back-on-failure transaction: a pre-user-scoping DB has its `entries`/
@@ -181,6 +181,7 @@ Key endpoints:
 | `GET /tdee-history`      | Rolling TDEE estimate recomputed as-of each past day (drift series) |
 | `POST /entries/import`   | Bulk-upsert a CSV body — tolerant flat-CSV parsing (see format below) |
 | `GET /entries/export?format=csv\|json` | Dump all entries                                 |
+| `POST /auth/register`    | Create an account (email + password), then auto-login          |
 | `POST /auth/login`       | Email + password → sets the session cookie                     |
 | `POST /auth/logout`      | Invalidate the session and clear the cookie                    |
 | `GET /auth/me`           | Is-authenticated probe (never 401s) for the frontend           |
@@ -201,15 +202,39 @@ mechanism is deliberately self-host-friendly — **email + password with an opaq
 server-side session token in a cookie** — so a cloned repo works with zero external
 services (no OAuth provider, no email/SMTP, no JWT signing keys).
 
-**Bootstrap the first account.** There is no public self-service signup yet (that
-is the next phase). Attach credentials to an account with the management command,
-run against the same database the app uses (`TRENDCUT_DB`):
+**Sign up.** Registration is **open**: anyone who can reach the app can create an
+account at `/signup.html` (or `POST /auth/register` with `{email, password}`).
+Signup validates the input (a light email check; password 8–1024 chars), creates the
+account with its default settings, and **auto-logs-in** — a new user lands
+authenticated on the dashboard with an empty history. Passwords need ≥ 8 characters;
+emails are normalized (trimmed + lowercased) so casing never mints a duplicate.
+
+> **Signup is unverified and unprotected — three known gaps, all deferred to later
+> phases:**
+> - **Emails are never verified.** They are login handles only, not confirmed or
+>   contactable; no email is ever sent. A typo in your email is not caught.
+> - **There is no password reset or account recovery.** A forgotten password or a
+>   mistyped signup email is currently **unrecoverable** (short of editing the
+>   database directly). Use a password manager.
+> - **Open signup has no abuse protection** (no CAPTCHA, no rate limiting), so
+>   scripted mass-signup is possible. Fine for a self-host behind a private URL;
+>   harden before exposing it widely.
+>
+> Note also that signup necessarily reveals whether an email is already registered
+> (it returns "already registered" so you know why you can't sign up) — a
+> user-enumeration oracle. This is an accepted tradeoff of open, no-verification
+> signup; **login** stays deliberately generic (same error for unknown email vs.
+> wrong password).
+
+**Bootstrap the first account (CLI).** You can also create/claim an account from the
+command line — useful for a self-host upgrade, or to attach credentials to data that
+predates auth. Run it against the same database the app uses (`TRENDCUT_DB`):
 
 ```bash
 python -m api.bootstrap_user --email you@example.com          # prompts for the password
 ```
 
-If an uncredentialed account exists — the user carried over from before auth — the
+If an uncredentialed account exists — a user carried over from before auth — the
 command **claims it in place**, preserving all its entries and settings; otherwise
 it creates a new account. It refuses to overwrite an already-credentialed email.
 

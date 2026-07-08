@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import datetime as _dt
 import os
+import sqlite3
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, HTTPException, Request, Response
@@ -26,9 +27,13 @@ from starlette.types import Scope
 from api.auth import (
     SESSION_COOKIE,
     SESSION_TTL_DAYS,
+    RegistrationError,
+    hash_password,
     hash_token,
     new_session_token,
+    normalize_email,
     session_expiry,
+    validate_registration,
     verify_password,
 )
 from api.csv_io import entries_to_csv, entries_to_json, parse_entries_csv
@@ -41,6 +46,7 @@ from api.models import (
     EstimateResponse,
     ImportResult,
     LoginRequest,
+    RegisterRequest,
     SettingsResponse,
     SettingsUpdate,
     TdeeHistoryResponse,
@@ -141,24 +147,13 @@ def create_app(storage: Storage | None = None, *, cookie_secure: bool | None = N
 
     # --- auth -------------------------------------------------------------- #
     # These routes must NOT depend on get_current_user_id (you can't require a
-    # session to log in). Registered before the static mount like every API route.
-    @app.post("/auth/login")
-    def login(
-        body: LoginRequest,
-        response: Response,
-        store: Storage = Depends(get_storage),
-    ) -> dict[str, bool]:
-        store.delete_expired_sessions(_now_iso())
-        user = store.get_user_by_email(body.email)
-        # Constant-time: verify_password runs a dummy argon2 verify when there is no
-        # user / no hash, so an unknown email and a wrong password are
-        # indistinguishable by timing. The error text is identical either way — no
-        # account-existence oracle.
-        password_hash = user.password_hash if user is not None else None
-        if not verify_password(password_hash, body.password):
-            raise HTTPException(status_code=401, detail="Invalid email or password")
+    # session to log in / register). Registered before the static mount like every
+    # API route.
+    def issue_session(response: Response, store: Storage, user_id: int) -> None:
+        """Create a session and set the cookie. Shared by login and register so both
+        produce byte-for-byte identical session cookies."""
         token = new_session_token()
-        store.create_session(hash_token(token), user.id, session_expiry())
+        store.create_session(hash_token(token), user_id, session_expiry())
         response.set_cookie(
             SESSION_COOKIE,
             token,
@@ -168,6 +163,52 @@ def create_app(storage: Storage | None = None, *, cookie_secure: bool | None = N
             samesite="lax",
             path="/",
         )
+
+    @app.post("/auth/login")
+    def login(
+        body: LoginRequest,
+        response: Response,
+        store: Storage = Depends(get_storage),
+    ) -> dict[str, bool]:
+        store.delete_expired_sessions(_now_iso())
+        # Normalize identically to registration so casing/whitespace resolve to the
+        # same account (see api.auth.normalize_email).
+        user = store.get_user_by_email(normalize_email(body.email))
+        # Constant-time: verify_password runs a dummy argon2 verify when there is no
+        # user / no hash, so an unknown email and a wrong password are
+        # indistinguishable by timing. The error text is identical either way — no
+        # account-existence oracle.
+        password_hash = user.password_hash if user is not None else None
+        if not verify_password(password_hash, body.password):
+            raise HTTPException(status_code=401, detail="Invalid email or password")
+        issue_session(response, store, user.id)
+        return {"ok": True}
+
+    @app.post("/auth/register")
+    def register(
+        body: RegisterRequest,
+        response: Response,
+        store: Storage = Depends(get_storage),
+    ) -> dict[str, bool]:
+        # Open signup, no email verification (see README). Validation is minimal and
+        # authoritative here; the client mirror is UX only.
+        try:
+            email = validate_registration(body.email, body.password)
+        except RegistrationError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        store.delete_expired_sessions(_now_iso())
+        password_hash = hash_password(body.password)
+        # The UNIQUE-email index is the real duplicate guard: create the account and
+        # catch a conflict, rather than check-then-insert (which races). The insert
+        # is atomic, so a rejected duplicate leaves no partial account.
+        try:
+            user_id = store.create_credentialed_user(email, password_hash)
+        except sqlite3.IntegrityError:
+            raise HTTPException(
+                status_code=409, detail="That email is already registered."
+            ) from None
+        # Auto-login: land the new user authenticated, exactly as login does.
+        issue_session(response, store, user_id)
         return {"ok": True}
 
     @app.post("/auth/logout")
