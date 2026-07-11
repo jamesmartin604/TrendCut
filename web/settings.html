@@ -108,6 +108,71 @@
         </div>
       </section>
 
+      <!-- Group 3: optional demographics for the day-1 provisional estimate -->
+      <section class="settings-group">
+        <h2 class="settings-group-label">Starting estimate (optional)</h2>
+        <div class="settings-card">
+          <p class="settings-hint">
+            While you have too little data for a real estimate, TrendCut can show a
+            <strong>generic day-1 estimate</strong> from a standard population formula
+            (Mifflin–St Jeor). It is clearly marked as not from your data, carries a
+            wide range, and disappears the moment your real estimate is ready. Filling
+            all four fields turns it on; leave them blank to skip it.
+          </p>
+          <div class="settings-row">
+            <label class="settings-row-label" for="age">Age</label>
+            <div class="settings-input-inline">
+              <input
+                class="settings-number"
+                id="age"
+                type="number"
+                inputmode="numeric"
+                step="1"
+                min="14"
+                max="100"
+                placeholder="—"
+              />
+              <span class="unit-mono">years</span>
+            </div>
+          </div>
+          <div class="settings-row">
+            <span class="settings-row-label">Biological sex</span>
+            <div class="segmented" role="group" aria-label="Biological sex">
+              <button class="segment" type="button" data-sex="female">Female</button>
+              <button class="segment" type="button" data-sex="male">Male</button>
+            </div>
+          </div>
+          <div class="settings-row">
+            <label class="settings-row-label" for="height">Height</label>
+            <div class="settings-input-inline">
+              <input
+                class="settings-number"
+                id="height"
+                type="number"
+                inputmode="decimal"
+                step="0.1"
+                placeholder="—"
+              />
+              <span class="unit-mono" id="height-unit">cm</span>
+            </div>
+          </div>
+          <div class="settings-row settings-row-stack">
+            <span class="settings-row-label">Activity level</span>
+            <div class="segmented segmented-wide" role="group" aria-label="Activity level">
+              <button class="segment" type="button" data-activity="sedentary">Sedentary</button>
+              <button class="segment" type="button" data-activity="light">Light</button>
+              <button class="segment" type="button" data-activity="moderate">Moderate</button>
+              <button class="segment" type="button" data-activity="active">Active</button>
+              <button class="segment" type="button" data-activity="very_active">Very active</button>
+            </div>
+            <p class="settings-hint">
+              Your activity level is the roughest part of this estimate — it's a broad
+              guess and the biggest source of error, which is why the range is wide.
+            </p>
+          </div>
+        </div>
+      </section>
+
       <div class="form-warnings" id="settings-warnings" hidden></div>
       <div class="form-error" id="settings-error" hidden></div>
 

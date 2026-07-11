@@ -11,7 +11,15 @@
 
 import { getSettings, importEntries, updateSettings } from "./api.js";
 import { importResultMessage } from "./onboarding.js";
-import { formatWeight, toKg, unitLabel } from "./units.js";
+import {
+  cmToDisplay,
+  displayToCm,
+  formatHeight,
+  formatWeight,
+  heightUnitLabel,
+  toKg,
+  unitLabel,
+} from "./units.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -19,6 +27,10 @@ const state = {
   units: "kg",
   targetKg: null, // canonical target weight in kg (display is derived from this)
   window: 28,
+  sex: null, // "male" | "female" | null
+  activity: null, // activity_level enum | null
+  heightCm: null, // canonical height in cm; display derives from this
+  heightDirty: false, // true once the user edits the height field
 };
 
 // ---------- load ---------- //
@@ -37,6 +49,26 @@ async function load() {
   $("alpha-slider").value = s.alpha;
   renderAlpha(s.alpha);
   setWindowButtons(s.window_days);
+
+  // Demographics (optional). Height stays canonical in cm; only the display unit
+  // and the on-screen value change with the weight-unit toggle.
+  state.sex = s.sex ?? null;
+  state.activity = s.activity_level ?? null;
+  state.heightCm = s.height_cm ?? null;
+  state.heightDirty = false;
+  $("age").value = s.age ?? "";
+  $("height").value = formatHeight(s.height_cm, state.units);
+  $("height-unit").textContent = heightUnitLabel(state.units);
+  setSegment("[data-sex]", "sex", state.sex);
+  setSegment("[data-activity]", "activity", state.activity);
+}
+
+// ---------- segmented (sex / activity) ---------- //
+
+function setSegment(selector, dataKey, value) {
+  for (const b of document.querySelectorAll(selector)) {
+    b.classList.toggle("is-active", b.dataset[dataKey] === value);
+  }
 }
 
 // ---------- units ---------- //
@@ -53,10 +85,21 @@ function onUnitsChange(newUnits) {
   // in the new unit; keep the canonical kg value stable.
   const raw = $("target-weight").value.trim();
   const kg = raw === "" ? null : toKg(Number(raw), state.units);
+
+  // Height: capture the current field value in canonical cm first (using the OLD
+  // unit), so switching units never drifts the stored height.
+  const rawH = $("height").value.trim();
+  const heightCm = rawH === "" ? null : displayToCm(Number(rawH), state.units);
+
   state.units = newUnits;
   setUnitsButtons(newUnits);
   $("target-weight-unit").textContent = unitLabel(newUnits);
   $("target-weight").value = kg == null ? "" : formatWeight(kg, newUnits);
+  $("height-unit").textContent = heightUnitLabel(newUnits);
+  // Redisplay height from the canonical cm (unedited height reads from state so a
+  // toggle round-trip shows the original value, not a re-rounded one).
+  const cm = state.heightDirty ? heightCm : state.heightCm;
+  $("height").value = formatHeight(cm, newUnits);
 }
 
 // ---------- alpha ---------- //
@@ -124,6 +167,19 @@ async function save() {
   const date = $("target-date").value;
   if (date !== "") patch.target_date = date;
 
+  // Demographics (optional). Each is sent only when present; skipping leaves it
+  // unset (the endpoint ignores nulls). Height goes as canonical cm: if the user
+  // didn't edit the field we send the stored cm as-is (no re-rounding drift);
+  // otherwise we convert the edited display value back to cm.
+  const rawAge = $("age").value.trim();
+  if (rawAge !== "" && !Number.isNaN(Number(rawAge))) patch.age = Math.round(Number(rawAge));
+  if (state.sex != null) patch.sex = state.sex;
+  if (state.activity != null) patch.activity_level = state.activity;
+  const rawHeight = $("height").value.trim();
+  if (rawHeight !== "" && !Number.isNaN(Number(rawHeight))) {
+    patch.height_cm = state.heightDirty ? displayToCm(Number(rawHeight), state.units) : state.heightCm;
+  }
+
   const warnings = softWarnings();
   warnEl.hidden = warnings.length === 0;
   warnEl.innerHTML = warnings.map((w) => `<span>${escapeHtml(w)}</span>`).join("");
@@ -134,6 +190,10 @@ async function save() {
   try {
     const saved = await updateSettings(patch);
     state.targetKg = saved.target_weight;
+    // Re-sync canonical demographics from the server's echo so a later unit toggle
+    // reconverts from the true stored values.
+    state.heightCm = saved.height_cm ?? null;
+    state.heightDirty = false;
     savedEl.hidden = false;
     setTimeout(() => (savedEl.hidden = true), 2500);
   } catch (err) {
@@ -256,6 +316,21 @@ function init() {
     b.addEventListener("click", () => setWindowButtons(Number(b.dataset.window)));
   }
   $("alpha-slider").addEventListener("input", (e) => renderAlpha(Number(e.target.value)));
+  for (const b of document.querySelectorAll("[data-sex]")) {
+    b.addEventListener("click", () => {
+      state.sex = b.dataset.sex;
+      setSegment("[data-sex]", "sex", state.sex);
+    });
+  }
+  for (const b of document.querySelectorAll("[data-activity]")) {
+    b.addEventListener("click", () => {
+      state.activity = b.dataset.activity;
+      setSegment("[data-activity]", "activity", state.activity);
+    });
+  }
+  $("height").addEventListener("input", () => {
+    state.heightDirty = true;
+  });
   $("settings-form").addEventListener("submit", (e) => {
     e.preventDefault();
     save();

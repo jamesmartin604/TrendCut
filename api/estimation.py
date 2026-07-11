@@ -21,17 +21,56 @@ import numpy as np
 from api.models import (
     EstimateResponse,
     PlateauResult,
+    ProvisionalTDEE,
     TdeeHistoryPoint,
     TdeeHistoryResponse,
     TdeeResult,
     TrendPoint,
 )
+from api.provisional import provisional_tdee
 from api.storage import Entry, Settings
 from estimator.plateau import classify_plateau
 from estimator.smoothing import ewma_trend
 from estimator.tdee import estimate_tdee
 
 __all__ = ["compute_estimate", "compute_tdee_history", "entries_to_series"]
+
+
+def _latest_weight_kg(entries: list[Entry]) -> float | None:
+    """The most recent logged weigh-in (entries are date-ordered), or None.
+
+    This is the anchor for the provisional day-1 estimate. We deliberately use the
+    latest weigh-in as-is with no recency cutoff: the provisional carries a wide
+    population band and is retired the moment the real estimate arrives, so a
+    somewhat stale anchor is an acceptable, short-lived approximation rather than
+    something worth gating on.
+    """
+    for entry in reversed(entries):
+        if entry.weight_kg is not None:
+            return entry.weight_kg
+    return None
+
+
+def _provisional(entries: list[Entry], settings: Settings, status: str) -> ProvisionalTDEE | None:
+    """The opt-in provisional estimate, or None.
+
+    Present ONLY while the real estimator withholds a number
+    (``status == "insufficient_data"``) AND the user has complete demographics AND a
+    weigh-in exists to anchor the formula. It is never returned alongside a real
+    estimate (``ok``/``low_confidence``) — the two are never both authoritative.
+    """
+    if status != "insufficient_data":
+        return None
+    p = provisional_tdee(
+        age=settings.age,
+        sex=settings.sex,
+        height_cm=settings.height_cm,
+        weight_kg=_latest_weight_kg(entries),
+        activity_level=settings.activity_level,
+    )
+    if p is None:
+        return None
+    return ProvisionalTDEE(tdee=p.tdee, low=p.low, high=p.high, method=p.method, basis=p.basis)
 
 
 def entries_to_series(
@@ -119,6 +158,7 @@ def compute_estimate(entries: list[Entry], settings: Settings) -> EstimateRespon
             expected_deficit_kcal=verdict.expected_deficit_kcal,
             based_on_status=verdict.based_on_status,
         ),
+        provisional=_provisional(entries, settings, est.status),
     )
 
 

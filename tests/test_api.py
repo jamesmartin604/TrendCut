@@ -384,6 +384,82 @@ def test_estimate_requirements_matches_estimator_and_needs_auth() -> None:
     storage.close()
 
 
+# --- provisional (day-1) estimate contract -------------------------------- #
+_DEMOGRAPHICS = {"age": 30, "sex": "male", "height_cm": 180.0, "activity_level": "moderate"}
+
+
+def test_provisional_present_below_threshold_with_demographics(client: TestClient) -> None:
+    # Complete demographics + one weigh-in (insufficient data) → provisional appears.
+    assert client.put("/settings", json=_DEMOGRAPHICS).status_code == 200
+    client.put("/entries/2026-03-01", json={"weight_kg": 80.0, "kcal": 2000})
+    body = client.get("/estimate").json()
+    assert body["tdee"]["status"] == "insufficient_data"
+    prov = body["provisional"]
+    assert prov is not None
+    assert prov["tdee"] == pytest.approx(2759.0)  # hand-computed elsewhere
+    assert prov["low"] < prov["tdee"] < prov["high"]
+    assert prov["method"] == "mifflin_st_jeor"
+
+
+def test_provisional_absent_without_demographics(client: TestClient) -> None:
+    # Weigh-in but no demographics → no provisional (Phase-3 behaviour unchanged).
+    client.put("/entries/2026-03-01", json={"weight_kg": 80.0, "kcal": 2000})
+    body = client.get("/estimate").json()
+    assert body["tdee"]["status"] == "insufficient_data"
+    assert body["provisional"] is None
+
+
+def test_provisional_absent_with_incomplete_demographics(client: TestClient) -> None:
+    client.put("/settings", json={"age": 30, "sex": "male"})  # height + activity missing
+    client.put("/entries/2026-03-01", json={"weight_kg": 80.0, "kcal": 2000})
+    assert client.get("/estimate").json()["provisional"] is None
+
+
+def test_provisional_absent_without_any_weighin(client: TestClient) -> None:
+    # Demographics but nothing logged → no weight to anchor the formula → no number.
+    client.put("/settings", json=_DEMOGRAPHICS)
+    assert client.get("/estimate").json()["provisional"] is None
+
+
+def test_provisional_retired_once_real_estimate_exists(client: TestClient) -> None:
+    # Past the threshold (a real 'ok' estimate) the provisional is gone even though
+    # demographics are present — the two are never both authoritative.
+    client.put("/settings", json=_DEMOGRAPHICS)
+    _seed_sufficient(client)
+    body = client.get("/estimate").json()
+    assert body["tdee"]["status"] == "ok"
+    assert body["provisional"] is None
+
+
+def test_provisional_absent_in_low_confidence(client: TestClient) -> None:
+    # A real (flagged) estimate is the headline in low_confidence — no provisional.
+    client.put("/settings", json=_DEMOGRAPHICS)
+    for i in range(12):  # flat weight + absurd intake → TDEE outside plausible band
+        client.put(f"/entries/2026-06-{i + 1:02d}", json={"weight_kg": 80.0, "kcal": 7000})
+    body = client.get("/estimate").json()
+    assert body["tdee"]["status"] == "low_confidence"
+    assert body["provisional"] is None
+
+
+def test_settings_rejects_bad_demographics(client: TestClient) -> None:
+    assert client.put("/settings", json={"sex": "other"}).status_code == 422
+    assert client.put("/settings", json={"activity_level": "olympic"}).status_code == 422
+    assert client.put("/settings", json={"age": 5}).status_code == 422
+    assert client.put("/settings", json={"age": 200}).status_code == 422
+    assert client.put("/settings", json={"height_cm": 40}).status_code == 422
+    assert client.put("/settings", json={"height_cm": 400}).status_code == 422
+
+
+def test_settings_roundtrips_valid_demographics(client: TestClient) -> None:
+    r = client.put("/settings", json=_DEMOGRAPHICS)
+    assert r.status_code == 200
+    got = r.json()
+    assert got["age"] == 30
+    assert got["sex"] == "male"
+    assert got["height_cm"] == 180.0
+    assert got["activity_level"] == "moderate"
+
+
 # --- registration (public signup) ----------------------------------------- #
 def test_register_new_account_then_use_it() -> None:
     """Smoke test for the public /auth/register route: a fresh, unauthenticated

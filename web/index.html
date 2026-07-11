@@ -41,6 +41,28 @@
 
       <p class="onboarding-progress" id="onboarding-progress" hidden></p>
 
+      <!-- Opt-in day-1 provisional (generic population formula). Deliberately styled
+           distinct from the real hero estimate; retired once real data arrives. -->
+      <div class="provisional" id="onboarding-provisional" hidden>
+        <span class="provisional-tag">Generic starting estimate — not from your data</span>
+        <div class="provisional-value">
+          <span id="provisional-tdee">–</span>
+          <span class="provisional-unit">kcal/day</span>
+        </div>
+        <p class="provisional-band" id="provisional-band"></p>
+        <p class="provisional-caveat" id="provisional-caveat"></p>
+      </div>
+
+      <p class="onboarding-hint" id="onboarding-demographics-prompt" hidden>
+        Want a rough starting number now? <a href="/settings.html">Add your age, sex,
+        height and activity level</a> for a generic day-1 estimate (clearly marked as
+        not from your data).
+      </p>
+      <p class="onboarding-hint" id="onboarding-weight-prompt" hidden>
+        Log a current weight and we can show a generic starting estimate from your
+        details while the real one builds.
+      </p>
+
       <div class="onboarding-actions">
         <button class="btn btn-primary" type="button" id="onboarding-import-btn">
           Import your history (CSV)

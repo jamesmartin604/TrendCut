@@ -13,6 +13,7 @@ import { goalLineAnchors, nearestIndex } from "./chart-math.js";
 import { renderWeightChart } from "./chart.js";
 import { openEntryForm } from "./entry-form.js";
 import {
+  coldStartProvisionalView,
   importResultMessage,
   onboardingProgress,
   onboardingProgressText,
@@ -530,6 +531,37 @@ function renderOnboarding() {
       onboardingProgress(state.estimate, state.requirements),
     );
     progress.hidden = false;
+  }
+
+  renderProvisional();
+}
+
+/**
+ * The opt-in day-1 provisional, shown inside the onboarding card during cold-start.
+ * It is styled distinctly and labelled as a generic, non-data-derived estimate; the
+ * server only sends it below the real threshold, and it's gone at handoff. When it's
+ * absent we instead prompt for whatever's missing (demographics, or a weigh-in).
+ */
+function renderProvisional() {
+  const block = $("onboarding-provisional");
+  const demoPrompt = $("onboarding-demographics-prompt");
+  const weightPrompt = $("onboarding-weight-prompt");
+  block.hidden = true;
+  demoPrompt.hidden = true;
+  weightPrompt.hidden = true;
+
+  const view = coldStartProvisionalView(state.estimate, state.settings);
+  if (view.kind === "provisional") {
+    $("provisional-tdee").textContent = fmtInt(view.tdee);
+    $("provisional-band").textContent =
+      `Wide range: ${fmtInt(view.low)}–${fmtInt(view.high)} kcal/day — a generic ` +
+      "population estimate, not your data.";
+    $("provisional-caveat").textContent = view.basis;
+    block.hidden = false;
+  } else if (view.kind === "add_demographics") {
+    demoPrompt.hidden = false;
+  } else {
+    weightPrompt.hidden = false;
   }
 }
 

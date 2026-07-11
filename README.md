@@ -285,6 +285,37 @@ from the math:
 After an import the dashboard recomputes and either shows a real estimate (if enough
 was imported) or the honest "here's where you are, here's what's still needed" state.
 
+### Provisional day-1 estimate (opt-in)
+
+To bridge the cold-start gap, you can **optionally** get a rough starting number
+before you have enough data for the real estimate. In Settings, under *Starting
+estimate*, enter your age, biological sex, height and activity level. TrendCut then
+shows a **provisional TDEE** from the standard Mifflin–St Jeor population formula
+(BMR × an activity multiplier), anchored on your most recent weigh-in.
+
+It is deliberately hedged, and never confusable with the real estimate:
+
+* **It is a generic population estimate, not derived from your data** — labelled as
+  such, styled distinctly (a dashed "provisional" card), and shown only inside the
+  cold-start onboarding view, never as the main hero number.
+* **It carries a wide band** (±25%), reflecting the formula's known population-level
+  error: Mifflin–St Jeor predicts BMR to ~±10% (1 SD; Frankenfield et al. 2005),
+  compounded with the coarse activity-multiplier guess (the single largest error
+  source, which the in-app caption calls out). This is much wider than a data-derived
+  CI, so the narrowing when the real estimate arrives is genuine.
+* **It is shown only while the real estimator withholds a number**
+  (`status == "insufficient_data"`). The moment there's a real estimate (`ok` or
+  `low_confidence`), the provisional is **retired** — the data-derived number with
+  its own (narrower) CI is the headline. The two are never presented together.
+* **It never appears without complete demographics** *and* at least one logged
+  weigh-in to anchor the formula. Skip the demographics and nothing changes — you
+  get the honest "building" state exactly as before. Note the weigh-in anchor is used
+  as-is with no recency cutoff: a slightly stale weight is an accepted, short-lived
+  approximation given the wide band and the fact the provisional is soon retired.
+
+The provisional is computed on the fly (`api/provisional.py`, outside the frozen
+estimator) and never stored — only your raw demographics are saved.
+
 ### CSV import format
 
 `POST /entries/import` takes a CSV body (the endpoint reads the raw request body,

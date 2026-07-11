@@ -220,3 +220,60 @@ def test_phase1_db_gains_auth_schema_without_data_loss(tmp_path) -> None:
         assert again.get_user_by_email("u@test.local") is not None
     finally:
         again.close()
+
+
+# --- Phase-4 demographics migration --------------------------------------- #
+def test_legacy_db_gains_demographics_columns(legacy_db_path: str) -> None:
+    # The full migration chain (legacy → user-scoped → auth → demographics) leaves
+    # the settings table with the Phase-4 columns, all NULL, data preserved.
+    store = Storage(legacy_db_path)
+    try:
+        cols = {r["name"] for r in store._conn.execute("PRAGMA table_info(settings)")}  # noqa: SLF001
+        assert {"age", "sex", "height_cm", "activity_level"} <= cols
+        s = store.get_settings(DEFAULT_USER_ID)
+        assert s.age is None and s.sex is None and s.height_cm is None and s.activity_level is None
+        # Existing settings values are untouched by the column adds.
+        assert s.units == "lb"
+    finally:
+        store.close()
+
+
+def test_phase3_db_gains_demographics_without_data_loss(tmp_path) -> None:
+    """A Phase-3-shaped DB (user-scoped + auth, no demographic columns) gains them
+    on open, non-destructively, and the provisional inputs then round-trip."""
+    path = str(tmp_path / "phase3.db")
+    conn = sqlite3.connect(path)
+    conn.executescript(
+        """
+        CREATE TABLE users (id INTEGER PRIMARY KEY, email TEXT, password_hash TEXT,
+            created_at TEXT NOT NULL);
+        CREATE UNIQUE INDEX idx_users_email ON users(email);
+        CREATE TABLE entries (user_id INTEGER NOT NULL REFERENCES users(id), date TEXT NOT NULL,
+            weight_kg REAL, kcal INTEGER, created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
+            PRIMARY KEY (user_id, date));
+        CREATE TABLE settings (user_id INTEGER PRIMARY KEY REFERENCES users(id),
+            alpha REAL NOT NULL, window_days INTEGER NOT NULL, energy_density REAL NOT NULL,
+            expected_deficit_kcal REAL NOT NULL, target_weight REAL, target_date TEXT,
+            units TEXT NOT NULL);
+        CREATE TABLE sessions (token_hash TEXT PRIMARY KEY,
+            user_id INTEGER NOT NULL REFERENCES users(id),
+            created_at TEXT NOT NULL, expires_at TEXT NOT NULL);
+        INSERT INTO users VALUES (1, NULL, NULL, 't');
+        INSERT INTO settings VALUES (1, 0.1, 28, 7700.0, 300.0, 75.0, '2026-08-31', 'kg');
+        INSERT INTO entries VALUES (1, '2026-01-01', 80.0, 2000, 't', 't');
+        """
+    )
+    conn.commit()
+    conn.close()
+
+    store = Storage(path)
+    try:
+        cols = {r["name"] for r in store._conn.execute("PRAGMA table_info(settings)")}  # noqa: SLF001
+        assert {"age", "sex", "height_cm", "activity_level"} <= cols
+        # Existing settings + entry preserved; demographics start empty then persist.
+        assert store.get_settings(DEFAULT_USER_ID).target_weight == 75.0
+        assert len(store.list_entries(DEFAULT_USER_ID)) == 1
+        store.update_settings(DEFAULT_USER_ID, age=30, sex="male", height_cm=180.0)
+        assert store.get_settings(DEFAULT_USER_ID).age == 30
+    finally:
+        store.close()

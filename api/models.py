@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel
+from typing import Literal
+
+from pydantic import BaseModel, Field
 
 __all__ = [
     "AuthMeResponse",
@@ -13,6 +15,7 @@ __all__ = [
     "ImportResult",
     "LoginRequest",
     "PlateauResult",
+    "ProvisionalTDEE",
     "RegisterRequest",
     "SettingsResponse",
     "SettingsUpdate",
@@ -21,6 +24,11 @@ __all__ = [
     "TdeeResult",
     "TrendPoint",
 ]
+
+# Enumerations for the optional demographic settings (Phase 4). Kept as Literals so
+# an out-of-set value is a clean 422 at the request boundary.
+Sex = Literal["male", "female"]
+ActivityLevel = Literal["sedentary", "light", "moderate", "active", "very_active"]
 
 
 class LoginRequest(BaseModel):
@@ -60,6 +68,13 @@ class SettingsUpdate(BaseModel):
     target_weight: float | None = None
     target_date: str | None = None
     units: str | None = None
+    # Optional demographics for the day-1 provisional. Ranges are generous plausible
+    # human bounds; enums are validated by the Literal types. An out-of-range/bad
+    # value is a 422, so the stored demographics can't be garbage.
+    age: int | None = Field(default=None, ge=14, le=100)
+    sex: Sex | None = None
+    height_cm: float | None = Field(default=None, ge=120, le=250)
+    activity_level: ActivityLevel | None = None
 
 
 class SettingsResponse(BaseModel):
@@ -70,6 +85,10 @@ class SettingsResponse(BaseModel):
     target_weight: float | None
     target_date: str | None
     units: str
+    age: int | None = None
+    sex: str | None = None
+    height_cm: float | None = None
+    activity_level: str | None = None
 
 
 class ImportResult(BaseModel):
@@ -119,6 +138,22 @@ class EstimateRequirements(BaseModel):
     min_intake_days: int
 
 
+class ProvisionalTDEE(BaseModel):
+    """Opt-in day-1 estimate from a population formula (Mifflin–St Jeor + activity).
+
+    Present ONLY during cold-start (``tdee.status == "insufficient_data"``) when the
+    user has supplied complete demographics. It is a generic starting estimate, not
+    derived from the user's data, and is retired once the real estimate exists — the
+    ``basis`` string carries that caveat for display.
+    """
+
+    tdee: float
+    low: float
+    high: float
+    method: str
+    basis: str
+
+
 class EstimateResponse(BaseModel):
     window_days: int
     alpha: float
@@ -129,6 +164,8 @@ class EstimateResponse(BaseModel):
     trend: list[TrendPoint]
     tdee: TdeeResult
     plateau: PlateauResult
+    # Present only during cold-start with complete demographics; None otherwise.
+    provisional: ProvisionalTDEE | None = None
 
 
 class TdeeHistoryPoint(BaseModel):

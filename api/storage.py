@@ -15,7 +15,8 @@ Schema (multi-user-ready — Phase 1):
   Re-logging a date **upserts** (updates in place), never duplicates.
   ``created_at`` is preserved across upserts; ``updated_at`` moves.
 * ``settings`` — one row per user (``user_id`` PK), holding the estimator/plan
-  knobs.
+  knobs plus optional demographics (``age``/``sex``/``height_cm``/
+  ``activity_level``) for the Phase-4 provisional estimate.
 * ``users`` also carries ``email`` (UNIQUE via index; NULL until claimed) and
   ``password_hash`` for authentication (Phase 2).
 * ``sessions`` — opaque login sessions: ``token_hash`` (SHA-256 of the cookie
@@ -71,6 +72,12 @@ class Settings:
     target_weight: float | None
     target_date: str | None
     units: str
+    # Optional demographics for the Phase-4 provisional (day-1 formula) estimate.
+    # All nullable; the provisional is only computed when the full set is present.
+    age: int | None = None
+    sex: str | None = None  # "male" | "female"
+    height_cm: float | None = None
+    activity_level: str | None = None  # sedentary|light|moderate|active|very_active
 
 
 # Defaults for a user's settings row. window_days = 28 because a 14-day window
@@ -84,6 +91,10 @@ _DEFAULT_SETTINGS = Settings(
     target_weight=None,
     target_date=None,
     units="kg",
+    age=None,
+    sex=None,
+    height_cm=None,
+    activity_level=None,
 )
 
 _SETTINGS_FIELDS = (
@@ -94,6 +105,10 @@ _SETTINGS_FIELDS = (
     "target_weight",
     "target_date",
     "units",
+    "age",
+    "sex",
+    "height_cm",
+    "activity_level",
 )
 
 
@@ -146,6 +161,7 @@ class Storage:
             # the auth migration opens its own BEGIN IMMEDIATE.
             self._conn.commit()
             self._ensure_auth_schema()
+            self._ensure_demographics_schema()
 
     def _table_exists(self, name: str) -> bool:
         row = self._conn.execute(
@@ -184,7 +200,11 @@ class Storage:
                 expected_deficit_kcal REAL NOT NULL,
                 target_weight         REAL,
                 target_date           TEXT,
-                units                 TEXT NOT NULL
+                units                 TEXT NOT NULL,
+                age                   INTEGER,
+                sex                   TEXT,
+                height_cm             REAL,
+                activity_level        TEXT
             );
             CREATE TABLE sessions (
                 token_hash TEXT PRIMARY KEY,
@@ -353,6 +373,28 @@ class Storage:
                 )
                 """
             )
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+
+    def _ensure_demographics_schema(self) -> None:
+        """Add the Phase-4 demographic columns to ``settings`` if missing (idempotent).
+
+        Age / sex / height / activity level feed the opt-in provisional (day-1
+        formula) TDEE. All nullable, so a plain ``ALTER TABLE ADD COLUMN`` suffices
+        (no rebuild); wrapped in one transaction with rollback like the other
+        migrations.
+        """
+        if "age" in self._columns("settings"):
+            return
+        conn = self._conn
+        conn.execute("BEGIN IMMEDIATE")
+        try:
+            conn.execute("ALTER TABLE settings ADD COLUMN age INTEGER")
+            conn.execute("ALTER TABLE settings ADD COLUMN sex TEXT")
+            conn.execute("ALTER TABLE settings ADD COLUMN height_cm REAL")
+            conn.execute("ALTER TABLE settings ADD COLUMN activity_level TEXT")
             conn.commit()
         except Exception:
             conn.rollback()
@@ -570,6 +612,10 @@ class Storage:
             target_weight=row["target_weight"],
             target_date=row["target_date"],
             units=row["units"],
+            age=row["age"],
+            sex=row["sex"],
+            height_cm=row["height_cm"],
+            activity_level=row["activity_level"],
         )
 
     def update_settings(self, user_id: int, **fields: object) -> Settings:

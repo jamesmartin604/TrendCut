@@ -51,6 +51,42 @@ export function onboardingProgress(estimate, requirements) {
   };
 }
 
+/** True when all four demographic settings needed for the provisional are present.
+ *  (Weight isn't here — it comes from the latest weigh-in, checked server-side.) */
+export function demographicsComplete(settings) {
+  if (!settings) return false;
+  return (
+    settings.age != null &&
+    settings.sex != null &&
+    settings.height_cm != null &&
+    settings.activity_level != null
+  );
+}
+
+/** True when the estimate carries a provisional (opt-in day-1 formula) number.
+ *  The server only includes it during cold-start with complete demographics + a
+ *  weigh-in, so the frontend just checks presence. */
+export function hasProvisional(estimate) {
+  return !!(estimate && estimate.provisional);
+}
+
+/**
+ * What the cold-start card should render in its provisional slot. Called only while
+ * onboarding is shown (state !== "ready"):
+ *   - "provisional"      → show the generic day-1 estimate + its wide band + caveat.
+ *   - "add_demographics" → no demographics yet; offer to add them for a rough start.
+ *   - "needs_weight"     → demographics complete but no provisional came back, which
+ *                          means there's no weigh-in yet to anchor the formula.
+ */
+export function coldStartProvisionalView(estimate, settings) {
+  if (hasProvisional(estimate)) {
+    const p = estimate.provisional;
+    return { kind: "provisional", tdee: p.tdee, low: p.low, high: p.high, basis: p.basis };
+  }
+  if (!demographicsComplete(settings)) return { kind: "add_demographics" };
+  return { kind: "needs_weight" };
+}
+
 /** Honest one-line progress sentence for the "building" state, from
  *  onboardingProgress() output. States what you have vs. the real threshold. */
 export function onboardingProgressText(progress) {

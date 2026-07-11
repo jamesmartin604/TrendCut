@@ -2,6 +2,9 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  coldStartProvisionalView,
+  demographicsComplete,
+  hasProvisional,
   importResultMessage,
   onboardingProgress,
   onboardingProgressText,
@@ -72,6 +75,44 @@ test("onboardingProgressText states have-of-target for both series", () => {
   assert.match(text, /last 28 days/);
   assert.match(text, /4 of 10 weigh-in days/);
   assert.match(text, /6 of 10 intake days/);
+});
+
+// --- provisional (day-1) helpers --- //
+const fullDemographics = { age: 30, sex: "male", height_cm: 180, activity_level: "moderate" };
+
+test("demographicsComplete requires all four fields", () => {
+  assert.equal(demographicsComplete(fullDemographics), true);
+  assert.equal(demographicsComplete({ ...fullDemographics, height_cm: null }), false);
+  assert.equal(demographicsComplete({ age: 30, sex: "male" }), false);
+  assert.equal(demographicsComplete(null), false);
+});
+
+test("hasProvisional reflects presence of the estimate.provisional field", () => {
+  assert.equal(hasProvisional({ provisional: { tdee: 2500 } }), true);
+  assert.equal(hasProvisional({ provisional: null }), false);
+  assert.equal(hasProvisional({}), false);
+  assert.equal(hasProvisional(null), false);
+});
+
+test("coldStartProvisionalView: shows the provisional when present", () => {
+  const est = { provisional: { tdee: 2759, low: 2069, high: 3449, basis: "generic…" } };
+  const view = coldStartProvisionalView(est, fullDemographics);
+  assert.equal(view.kind, "provisional");
+  assert.equal(view.tdee, 2759);
+  assert.equal(view.low, 2069);
+  assert.equal(view.high, 3449);
+});
+
+test("coldStartProvisionalView: prompts for demographics when they're missing", () => {
+  const view = coldStartProvisionalView({ provisional: null }, { age: 30 });
+  assert.equal(view.kind, "add_demographics");
+});
+
+test("coldStartProvisionalView: prompts for a weigh-in when demographics complete but no number", () => {
+  // Demographics are complete, yet the server returned no provisional → must be the
+  // missing weight anchor.
+  const view = coldStartProvisionalView({ provisional: null }, fullDemographics);
+  assert.equal(view.kind, "needs_weight");
 });
 
 test("importResultMessage: nothing imported is not ok", () => {
