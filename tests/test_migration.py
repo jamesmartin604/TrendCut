@@ -277,3 +277,77 @@ def test_phase3_db_gains_demographics_without_data_loss(tmp_path) -> None:
         assert store.get_settings(DEFAULT_USER_ID).age == 30
     finally:
         store.close()
+
+
+# --- password-reset-tokens migration -------------------------------------- #
+def test_legacy_db_gains_reset_tokens_table(legacy_db_path: str) -> None:
+    # The full migration chain also creates the password_reset_tokens table.
+    store = Storage(legacy_db_path)
+    try:
+        assert (
+            store._conn.execute(  # noqa: SLF001
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='password_reset_tokens'"
+            ).fetchone()
+            is not None
+        )
+        cols = {
+            r["name"]
+            for r in store._conn.execute("PRAGMA table_info(password_reset_tokens)")  # noqa: SLF001
+        }
+        assert {"token_hash", "user_id", "created_at", "expires_at", "used_at"} <= cols
+    finally:
+        store.close()
+
+
+def test_pre_reset_db_gains_tokens_table_without_data_loss(tmp_path) -> None:
+    """A DB with everything EXCEPT the reset-tokens table (a pre-this-phase shape)
+    gains it on open, non-destructively and idempotently, and reset tokens then work."""
+    path = str(tmp_path / "pre_reset.db")
+    conn = sqlite3.connect(path)
+    conn.executescript(
+        """
+        CREATE TABLE users (id INTEGER PRIMARY KEY, email TEXT, password_hash TEXT,
+            created_at TEXT NOT NULL);
+        CREATE UNIQUE INDEX idx_users_email ON users(email);
+        CREATE TABLE entries (user_id INTEGER NOT NULL REFERENCES users(id), date TEXT NOT NULL,
+            weight_kg REAL, kcal INTEGER, created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
+            PRIMARY KEY (user_id, date));
+        CREATE TABLE settings (user_id INTEGER PRIMARY KEY REFERENCES users(id),
+            alpha REAL NOT NULL, window_days INTEGER NOT NULL, energy_density REAL NOT NULL,
+            expected_deficit_kcal REAL NOT NULL, target_weight REAL, target_date TEXT,
+            units TEXT NOT NULL, age INTEGER, sex TEXT, height_cm REAL, activity_level TEXT);
+        CREATE TABLE sessions (token_hash TEXT PRIMARY KEY,
+            user_id INTEGER NOT NULL REFERENCES users(id),
+            created_at TEXT NOT NULL, expires_at TEXT NOT NULL);
+        INSERT INTO users VALUES (1, 'a@b.com', 'hash', 't');
+        INSERT INTO settings VALUES
+            (1, 0.1, 28, 7700.0, 300.0, NULL, NULL, 'kg', NULL, NULL, NULL, NULL);
+        INSERT INTO entries VALUES (1, '2026-01-01', 80.0, 2000, 't', 't');
+        """
+    )
+    conn.commit()
+    conn.close()
+
+    store = Storage(path)
+    try:
+        assert (
+            store._conn.execute(  # noqa: SLF001
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='password_reset_tokens'"
+            ).fetchone()
+            is not None
+        )
+        # Existing data untouched.
+        assert store.get_user_by_email("a@b.com").id == DEFAULT_USER_ID
+        assert len(store.list_entries(DEFAULT_USER_ID)) == 1
+        # And the new machinery works on the upgraded DB.
+        store.create_reset_token("hash123", DEFAULT_USER_ID, "2099-01-01T00:00:00+00:00")
+        assert store.consume_reset_token("hash123", "2026-07-12T00:00:00+00:00") == DEFAULT_USER_ID
+    finally:
+        store.close()
+
+    # Idempotent: re-opening the upgraded DB is a no-op.
+    again = Storage(path)
+    try:
+        assert len(again.list_entries(DEFAULT_USER_ID)) == 1
+    finally:
+        again.close()

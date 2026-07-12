@@ -1445,6 +1445,15 @@ body {
   text-decoration: underline;
 }
 
+.auth-alt-sep {
+  margin: 0 6px;
+  color: var(--border-hairline, rgba(0, 0, 0, 0.2));
+}
+
+.auth-card .field-box.is-disabled {
+  opacity: 0.5;
+}
+
 /* Logout control at the right of the top bar. The nav's auto right margin already
    pushes trailing items to the edge; this just spaces it from a sibling button. */
 .topbar-logout {

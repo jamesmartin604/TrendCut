@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TrendCut · Reset password</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+    rel="stylesheet"
+  />
+  <link rel="stylesheet" href="/css/app.css" />
+  <script type="module" src="/js/forgot.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <span class="brand">TrendCut</span>
+    </div>
+  </header>
+
+  <main class="page auth-page">
+    <form class="card auth-card" id="forgot-form">
+      <div>
+        <h1 class="auth-title">Reset your password</h1>
+        <p class="auth-subtitle">
+          Enter your email and we'll send a link to set a new password.
+        </p>
+      </div>
+
+      <div>
+        <label class="field-label" for="email">Email</label>
+        <div class="field-box">
+          <input
+            class="field-input"
+            id="email"
+            name="email"
+            type="email"
+            autocomplete="username"
+            required
+          />
+        </div>
+      </div>
+
+      <div class="form-warnings" id="forgot-done" hidden></div>
+
+      <button class="btn btn-primary" id="forgot-submit" type="submit">Send reset link</button>
+
+      <p class="auth-alt">Remembered it? <a href="/login.html">Back to sign in</a></p>
+    </form>
+  </main>
+</body>
+</html>

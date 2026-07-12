@@ -21,6 +21,8 @@ Schema (multi-user-ready — Phase 1):
   ``password_hash`` for authentication (Phase 2).
 * ``sessions`` — opaque login sessions: ``token_hash`` (SHA-256 of the cookie
   token, never the raw token) PK, ``user_id``, ``created_at``, ``expires_at``.
+* ``password_reset_tokens`` — single-use password-reset tokens, stored hashed
+  (``token_hash`` SHA-256) with a short ``expires_at`` and a ``used_at`` marker.
 
 Every storage method takes an explicit ``user_id`` — there is no hidden default
 inside this layer; the caller (the API's ``get_current_user_id`` seam) supplies
@@ -162,6 +164,7 @@ class Storage:
             self._conn.commit()
             self._ensure_auth_schema()
             self._ensure_demographics_schema()
+            self._ensure_reset_tokens_schema()
 
     def _table_exists(self, name: str) -> bool:
         row = self._conn.execute(
@@ -211,6 +214,13 @@ class Storage:
                 user_id    INTEGER NOT NULL REFERENCES users(id),
                 created_at TEXT NOT NULL,
                 expires_at TEXT NOT NULL
+            );
+            CREATE TABLE password_reset_tokens (
+                token_hash TEXT PRIMARY KEY,
+                user_id    INTEGER NOT NULL REFERENCES users(id),
+                created_at TEXT NOT NULL,
+                expires_at TEXT NOT NULL,
+                used_at    TEXT
             );
             """
         )
@@ -400,6 +410,34 @@ class Storage:
             conn.rollback()
             raise
 
+    def _ensure_reset_tokens_schema(self) -> None:
+        """Add the ``password_reset_tokens`` table if missing (idempotent).
+
+        Stores only the SHA-256 hash of each reset token, single-use (``used_at``),
+        with a short expiry — a leak of this table hands out no usable links. A plain
+        ``CREATE TABLE IF NOT EXISTS`` in one transaction, like the other migrations.
+        """
+        if self._table_exists("password_reset_tokens"):
+            return
+        conn = self._conn
+        conn.execute("BEGIN IMMEDIATE")
+        try:
+            conn.execute(
+                """
+                CREATE TABLE password_reset_tokens (
+                    token_hash TEXT PRIMARY KEY,
+                    user_id    INTEGER NOT NULL REFERENCES users(id),
+                    created_at TEXT NOT NULL,
+                    expires_at TEXT NOT NULL,
+                    used_at    TEXT
+                )
+                """
+            )
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+
     # --- users ------------------------------------------------------------- #
     def create_user(self) -> int:
         """Create a new user (with default settings) and return its id.
@@ -504,6 +542,67 @@ class Storage:
         Called opportunistically on login/logout to keep the table from growing."""
         with self._lock:
             cur = self._conn.execute("DELETE FROM sessions WHERE expires_at <= ?", (now,))
+            self._conn.commit()
+        return cur.rowcount
+
+    def delete_user_sessions(self, user_id: int) -> int:
+        """Remove ALL of a user's sessions; return how many. Used on password reset so
+        the reset locks out anyone still holding an old session/password."""
+        with self._lock:
+            cur = self._conn.execute("DELETE FROM sessions WHERE user_id = ?", (user_id,))
+            self._conn.commit()
+        return cur.rowcount
+
+    # --- password reset ---------------------------------------------------- #
+    def update_user_password(self, user_id: int, password_hash: str) -> None:
+        """Set a user's password hash (used by the reset flow)."""
+        with self._lock:
+            self._conn.execute(
+                "UPDATE users SET password_hash = ? WHERE id = ?", (password_hash, user_id)
+            )
+            self._conn.commit()
+
+    def create_reset_token(self, token_hash: str, user_id: int, expires_at: str) -> None:
+        """Persist a password-reset token (only its SHA-256 hash is stored)."""
+        with self._lock:
+            self._conn.execute(
+                "INSERT INTO password_reset_tokens (token_hash, user_id, created_at, expires_at) "
+                "VALUES (?, ?, ?, ?)",
+                (token_hash, user_id, _now(), expires_at),
+            )
+            self._conn.commit()
+
+    def consume_reset_token(self, token_hash: str, now: str) -> int | None:
+        """Atomically claim a valid reset token, returning its ``user_id`` or None.
+
+        Single-use is enforced in ONE statement — ``UPDATE ... SET used_at WHERE
+        token_hash = ? AND used_at IS NULL AND expires_at > ?`` — and we act on the
+        row count, so there is no read-then-write race: a second concurrent reset with
+        the same token updates zero rows and gets None. Returns None for an unknown,
+        expired, or already-used token.
+        """
+        with self._lock:
+            cur = self._conn.execute(
+                "UPDATE password_reset_tokens SET used_at = ? "
+                "WHERE token_hash = ? AND used_at IS NULL AND expires_at > ?",
+                (now, token_hash, now),
+            )
+            if cur.rowcount == 0:
+                self._conn.commit()
+                return None
+            # We exclusively claimed the row above, so this read is safe.
+            row = self._conn.execute(
+                "SELECT user_id FROM password_reset_tokens WHERE token_hash = ?", (token_hash,)
+            ).fetchone()
+            self._conn.commit()
+        return int(row["user_id"]) if row is not None else None
+
+    def delete_expired_reset_tokens(self, now: str) -> int:
+        """Purge expired reset tokens; return how many. Called opportunistically."""
+        with self._lock:
+            cur = self._conn.execute(
+                "DELETE FROM password_reset_tokens WHERE expires_at <= ?", (now,)
+            )
             self._conn.commit()
         return cur.rowcount
 

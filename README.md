@@ -186,6 +186,8 @@ Key endpoints:
 | `POST /auth/login`       | Email + password → sets the session cookie                     |
 | `POST /auth/logout`      | Invalidate the session and clear the cookie                    |
 | `GET /auth/me`           | Is-authenticated probe (never 401s) for the frontend           |
+| `POST /auth/request-reset` | Request a password-reset link (generic reply; no enumeration) |
+| `POST /auth/reset`       | Set a new password with a valid token; invalidates old sessions |
 
 All data routes above require a valid session (a missing/expired session → `401`);
 only `/auth/*` and `/health` are reachable unauthenticated. See **Authentication** below.
@@ -210,13 +212,11 @@ account with its default settings, and **auto-logs-in** — a new user lands
 authenticated on the dashboard with an empty history. Passwords need ≥ 8 characters;
 emails are normalized (trimmed + lowercased) so casing never mints a duplicate.
 
-> **Signup is unverified and unprotected — three known gaps, all deferred to later
-> phases:**
-> - **Emails are never verified.** They are login handles only, not confirmed or
->   contactable; no email is ever sent. A typo in your email is not caught.
-> - **There is no password reset or account recovery.** A forgotten password or a
->   mistyped signup email is currently **unrecoverable** (short of editing the
->   database directly). Use a password manager.
+> **Signup is unverified and unprotected — known gaps, deferred to later phases:**
+> - **Emails are never verified at signup.** They are login handles, not confirmed
+>   at registration; a typo in your signup email isn't caught. (Password reset *does*
+>   email a link — see below — but that proves inbox access at reset time, not that
+>   the address was yours at signup.)
 > - **Open signup has no abuse protection** (no CAPTCHA, no rate limiting), so
 >   scripted mass-signup is possible. Fine for a self-host behind a private URL;
 >   harden before exposing it widely.
@@ -224,8 +224,8 @@ emails are normalized (trimmed + lowercased) so casing never mints a duplicate.
 > Note also that signup necessarily reveals whether an email is already registered
 > (it returns "already registered" so you know why you can't sign up) — a
 > user-enumeration oracle. This is an accepted tradeoff of open, no-verification
-> signup; **login** stays deliberately generic (same error for unknown email vs.
-> wrong password).
+> signup; **login** and **password reset** stay deliberately generic (same response
+> whether or not the email exists). Account recovery **is** now available (below).
 
 **Bootstrap the first account (CLI).** You can also create/claim an account from the
 command line — useful for a self-host upgrade, or to attach credentials to data that
@@ -259,6 +259,61 @@ path so timing can't reveal which accounts exist. **CSRF:** the app is same-orig
 and the session cookie is `SameSite=Lax`, which covers cross-site form POSTs for
 now; a dedicated CSRF token is a documented later consideration, not part of this
 phase. Basic brute-force throttling / lockout is likewise a later phase.
+
+### Password reset / account recovery
+
+A forgotten password (or a lost session) is recoverable via two delivery paths
+behind one seam — the token machinery is identical; only delivery differs:
+
+* **Hosted (SMTP).** With SMTP configured, `POST /auth/request-reset` (from the
+  "Forgot password?" link → `/forgot.html`) emails a reset link. The link opens
+  `/reset.html`, which takes a new password and calls `POST /auth/reset`.
+* **Self-host / operator break-glass (CLI).** No email provider required:
+  ```bash
+  python -m api.reset_password --email you@example.com --base-url https://your-host
+  ```
+  prints a reset link to the console for the operator to use or relay. Run it against
+  the app's database (`TRENDCUT_DB`).
+
+Security properties:
+
+* **Tokens are hashed at rest.** A random `secrets.token_urlsafe` token is delivered
+  to the user; only its **SHA-256 hash** is stored, so a leak of the reset table
+  enables no account takeover.
+* **Single-use and short-lived.** A token is consumed atomically (one `UPDATE …
+  WHERE used_at IS NULL AND expires_at > now`, acting on the row count — no
+  read-then-write race) and expires in 45 minutes; used/expired/unknown tokens are
+  rejected. Expired tokens are cleaned up opportunistically.
+* **A reset locks out the old credentials.** On success the user's password is
+  re-hashed (argon2id) and **all their existing sessions are invalidated**, so anyone
+  holding the old password or an old session cookie is logged out. The user signs in
+  fresh with the new password.
+* **`request-reset` never discloses account existence.** It returns the same generic
+  response for a registered and an unregistered email, doing the same synchronous
+  work (lookup + token generate + hash) in both cases so the response time doesn't
+  reveal existence. This is **defense-in-depth, not a load-bearing control** — signup
+  already leaks existence (above), and fully closing enumeration points at email
+  verification (deferred). The CLI, by contrast, reports "no such user" plainly: an
+  operator at a shell is a trusted context, not a public oracle.
+* New passwords use the same min/max rules as signup (carrying the max-length cap);
+  the reset token and URL are never logged on the SMTP path.
+
+**Deferred / known gaps:** there is **no rate limiting on `request-reset`** — a known
+address can be hit repeatedly (email-bombing / resource use); this is deferred,
+consistent with how signup/login deferred throttling. Enumeration is not fully closed
+(see above). Email at signup remains unverified.
+
+**SMTP configuration (env).** All optional — unset means the app still boots and uses
+the console/CLI path:
+
+| Variable | Purpose |
+|----------|---------|
+| `TRENDCUT_SMTP_HOST` | SMTP server host. **If set, `TRENDCUT_BASE_URL` is required** (below). Unset → console/CLI delivery. |
+| `TRENDCUT_SMTP_PORT` | SMTP port (default `587`). |
+| `TRENDCUT_SMTP_USER` / `TRENDCUT_SMTP_PASSWORD` | SMTP auth (optional). |
+| `TRENDCUT_SMTP_FROM` | From address (default `no-reply@trendcut.local`). |
+| `TRENDCUT_SMTP_STARTTLS` | STARTTLS on (default `1`). |
+| `TRENDCUT_BASE_URL` | Public base URL for reset links. **Required when SMTP is configured** — the app refuses to boot otherwise, rather than build a link from a (spoofable) request `Host` header and email it to a real user. |
 
 ## Onboarding (first run)
 
@@ -481,11 +536,13 @@ GitHub Actions secret, which **you** populate (nothing secret is committed):
 
 You can also deploy by hand at any time with `fly deploy`.
 
-> **Snapshot the volume before deploying the multi-user-readiness release.** The
-> first boot of that version runs a one-time, in-place schema migration on the live
-> `/data/trendcut.db` (rebuilding `entries`/`settings` to the user-scoped schema).
-> It is transactional and idempotent, but take a fresh snapshot first so a rollback
-> is trivial if anything looks wrong:
+> **Snapshot the volume before deploying any release that changes the schema** — the
+> multi-user-readiness rebuild, the auth/demographics column adds, and the
+> password-reset-tokens table all land on **first boot** via the in-place
+> auto-migrate-on-startup pattern against the live `/data/trendcut.db`. Each step is
+> transactional and idempotent (the reset-tokens table is an additive
+> `CREATE TABLE IF NOT EXISTS`), but take a fresh snapshot first so a rollback is
+> trivial if anything looks wrong:
 > ```bash
 > fly volumes list                     # find the volume id
 > fly volumes snapshots create <volume-id>

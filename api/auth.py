@@ -30,14 +30,18 @@ __all__ = [
     "MAX_EMAIL_LENGTH",
     "MAX_PASSWORD_LENGTH",
     "MIN_PASSWORD_LENGTH",
+    "RESET_TOKEN_TTL_MINUTES",
     "SESSION_COOKIE",
     "SESSION_TTL_DAYS",
     "RegistrationError",
     "hash_password",
     "hash_token",
+    "new_reset_token",
     "new_session_token",
     "normalize_email",
+    "reset_token_expiry",
     "session_expiry",
+    "validate_password",
     "validate_registration",
     "verify_password",
 ]
@@ -123,7 +127,19 @@ def normalize_email(email: str) -> str:
 
 
 class RegistrationError(ValueError):
-    """A human-readable registration-input rejection (maps to a 400)."""
+    """A human-readable registration/password-input rejection (maps to a 400)."""
+
+
+def validate_password(password: str) -> None:
+    """Enforce the min AND max password length (raises RegistrationError).
+
+    Shared by registration and password reset, so a reset password gets the same
+    rules — including the max-length cap that keeps an unbounded input from forcing
+    an expensive argon2 hash (a cheap DoS lever)."""
+    if len(password) < MIN_PASSWORD_LENGTH:
+        raise RegistrationError(f"Password must be at least {MIN_PASSWORD_LENGTH} characters.")
+    if len(password) > MAX_PASSWORD_LENGTH:
+        raise RegistrationError("That password is too long.")
 
 
 def validate_registration(email: str, password: str) -> str:
@@ -140,8 +156,24 @@ def validate_registration(email: str, password: str) -> str:
         raise RegistrationError("Enter a valid email address.")
     if len(normalized) > MAX_EMAIL_LENGTH:
         raise RegistrationError("That email address is too long.")
-    if len(password) < MIN_PASSWORD_LENGTH:
-        raise RegistrationError(f"Password must be at least {MIN_PASSWORD_LENGTH} characters.")
-    if len(password) > MAX_PASSWORD_LENGTH:
-        raise RegistrationError("That password is too long.")
+    validate_password(password)
     return normalized
+
+
+# --- password-reset tokens ------------------------------------------------- #
+# Short-lived, single-use, and stored only as a SHA-256 hash (via hash_token) —
+# a leak of the reset table hands out no usable links. 45 min is inside the
+# recommended 30–60 min window.
+RESET_TOKEN_TTL_MINUTES = 45
+
+
+def new_reset_token() -> str:
+    """A fresh opaque password-reset token (URL-safe, ~256 bits). Delivered to the
+    user; only its :func:`hash_token` is persisted."""
+    return secrets.token_urlsafe(32)
+
+
+def reset_token_expiry(created: datetime | None = None) -> str:
+    """ISO expiry timestamp ``RESET_TOKEN_TTL_MINUTES`` after ``created`` (default now)."""
+    base = created if created is not None else _now()
+    return (base + timedelta(minutes=RESET_TOKEN_TTL_MINUTES)).isoformat()

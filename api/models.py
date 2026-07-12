@@ -18,6 +18,8 @@ __all__ = [
     "PlateauResult",
     "ProvisionalTDEE",
     "RegisterRequest",
+    "RequestResetRequest",
+    "ResetRequest",
     "SettingsResponse",
     "SettingsUpdate",
     "TdeeHistoryPoint",
@@ -40,6 +42,15 @@ class LoginRequest(BaseModel):
 class RegisterRequest(BaseModel):
     email: str
     password: str
+
+
+class RequestResetRequest(BaseModel):
+    email: str
+
+
+class ResetRequest(BaseModel):
+    token: str
+    new_password: str
 
 
 class AuthMeResponse(BaseModel):

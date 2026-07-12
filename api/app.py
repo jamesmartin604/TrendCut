@@ -19,7 +19,7 @@ import os
 import sqlite3
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, HTTPException, Request, Response
+from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Request, Response
 from fastapi.responses import JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.types import Scope
@@ -30,9 +30,12 @@ from api.auth import (
     RegistrationError,
     hash_password,
     hash_token,
+    new_reset_token,
     new_session_token,
     normalize_email,
+    reset_token_expiry,
     session_expiry,
+    validate_password,
     validate_registration,
     verify_password,
 )
@@ -48,10 +51,13 @@ from api.models import (
     ImportResult,
     LoginRequest,
     RegisterRequest,
+    RequestResetRequest,
+    ResetRequest,
     SettingsResponse,
     SettingsUpdate,
     TdeeHistoryResponse,
 )
+from api.reset_delivery import ResetDelivery, build_reset_delivery_from_env
 from api.storage import Entry, Storage
 
 # The estimator's own minimum-data thresholds, surfaced read-only by
@@ -143,16 +149,38 @@ def _resolve_cookie_secure(cookie_secure: bool | None) -> bool:
     }
 
 
-def create_app(storage: Storage | None = None, *, cookie_secure: bool | None = None) -> FastAPI:
+def _reset_url(request: Request, token: str) -> str:
+    """The password-reset link for a token. Uses ``TRENDCUT_BASE_URL`` if set; only
+    falls back to the request's own base URL otherwise. That fallback is safe because
+    an SMTP-configured deploy is REQUIRED to set ``TRENDCUT_BASE_URL`` (see
+    :func:`~api.reset_delivery.build_reset_delivery_from_env`), so a Host-header-
+    derived URL is never emailed — it only reaches the console adapter / local dev."""
+    base = os.environ.get("TRENDCUT_BASE_URL") or str(request.base_url).rstrip("/")
+    return f"{base}/reset.html?token={token}"
+
+
+# Same generic reply whether or not the email exists — no account-existence oracle.
+_GENERIC_RESET_MESSAGE = "If that email is registered, a password reset link has been sent."
+
+
+def create_app(
+    storage: Storage | None = None,
+    *,
+    cookie_secure: bool | None = None,
+    reset_delivery: ResetDelivery | None = None,
+) -> FastAPI:
     """Build the app. Pass a Storage (e.g. in-memory) for tests; otherwise one is
     created from the ``TRENDCUT_DB`` env var (default ``trendcut.db``).
 
     ``cookie_secure`` controls the session cookie's ``Secure`` flag (see
     :func:`_resolve_cookie_secure`); tests and local HTTP dev pass ``False``.
+    ``reset_delivery`` overrides the password-reset delivery adapter (tests inject a
+    fake that captures the link); otherwise it's built from the environment.
     """
     app = FastAPI(title="TrendCut API", version="0.1.0")
     app.state.storage = storage or Storage(os.environ.get("TRENDCUT_DB", "trendcut.db"))
     cookie_secure = _resolve_cookie_secure(cookie_secure)
+    reset_delivery = reset_delivery or build_reset_delivery_from_env()
 
     # --- auth -------------------------------------------------------------- #
     # These routes must NOT depend on get_current_user_id (you can't require a
@@ -243,6 +271,55 @@ def create_app(storage: Storage | None = None, *, cookie_secure: bool | None = N
                 user = store.get_user(user_id)
                 return AuthMeResponse(authenticated=True, email=user.email if user else None)
         return AuthMeResponse(authenticated=False)
+
+    @app.post("/auth/request-reset")
+    def request_reset(
+        body: RequestResetRequest,
+        request: Request,
+        background: BackgroundTasks,
+        store: Storage = Depends(get_storage),
+    ) -> dict[str, object]:
+        # ALWAYS the same generic reply, regardless of whether the email exists — no
+        # account-existence disclosure. Both branches do the SAME synchronous work
+        # before responding (email lookup + token generate + SHA-256 hash), so the
+        # response time doesn't reveal existence; only the actual send (network) is
+        # deferred to a background task, and it runs the same either way. This is
+        # defense-in-depth, not a load-bearing control — signup already discloses
+        # existence, and closing that fully points at email verification (deferred).
+        store.delete_expired_reset_tokens(_now_iso())
+        email = normalize_email(body.email)
+        user = store.get_user_by_email(email)
+        token = new_reset_token()
+        token_hash = hash_token(token)
+        if user is not None:
+            store.create_reset_token(token_hash, user.id, reset_token_expiry())
+            # Deliver off the response path; the token/URL is never logged on the SMTP
+            # adapter (the console adapter prints it by design for self-host/dev).
+            background.add_task(reset_delivery.send, email, _reset_url(request, token))
+        return {"ok": True, "message": _GENERIC_RESET_MESSAGE}
+
+    @app.post("/auth/reset")
+    def reset(
+        body: ResetRequest,
+        store: Storage = Depends(get_storage),
+    ) -> dict[str, bool]:
+        # Validate the new password FIRST so a bad password doesn't burn the token.
+        try:
+            validate_password(body.new_password)
+        except RegistrationError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        # Atomically claim the token (single-use enforced in one UPDATE). None = the
+        # link is unknown, expired, or already used.
+        user_id = store.consume_reset_token(hash_token(body.token), _now_iso())
+        if user_id is None:
+            raise HTTPException(
+                status_code=400,
+                detail="This reset link is invalid or has expired. Request a new one.",
+            )
+        store.update_user_password(user_id, hash_password(body.new_password))
+        # A reset must lock out anyone holding the old password/session.
+        store.delete_user_sessions(user_id)
+        return {"ok": True}
 
     # --- CSV import / export ---------------------------------------------- #
     # Registered before the parametrised ``/entries/{date}`` routes so the literal
