@@ -17,6 +17,7 @@ in-memory ``Storage`` per test (no shared state, no real DB file). Covers:
 from __future__ import annotations
 
 import datetime as _dt
+import json
 
 import pytest
 from fastapi.testclient import TestClient
@@ -381,6 +382,28 @@ def test_estimate_requirements_matches_estimator_and_needs_auth() -> None:
             "min_weight_days": MIN_WEIGHT_DAYS,
             "min_intake_days": MIN_INTAKE_DAYS,
         }
+    storage.close()
+
+
+# --- public validation page (Phase 6) ------------------------------------- #
+def test_validation_page_and_artifact_are_public() -> None:
+    """The validation page + its data are static assets served with NO auth (a
+    stranger evaluating the product has no account). Uses a fresh client that never
+    logs in."""
+    storage = Storage(":memory:")
+    app = create_app(storage, cookie_secure=False)
+    with TestClient(app) as c:
+        # No session, yet both are reachable (200, not 401 / no login redirect).
+        assert c.get("/validation.html").status_code == 200
+        r = c.get("/validation.json")
+        assert r.status_code == 200
+        report = r.json()
+        # Only synthetic content — no user-data shapes anywhere in the artifact.
+        blob = json.dumps(report).lower()
+        for leak in ("email", "password", "token", "session", "weight_kg", "user_id"):
+            assert leak not in blob, f"validation artifact must not contain {leak!r}"
+        assert report["meta"]["total_cases"] > 0
+        assert report["scenarios"]
     storage.close()
 
 

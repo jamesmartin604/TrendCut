@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TrendCut · Estimator validation</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+    rel="stylesheet"
+  />
+  <link rel="stylesheet" href="/css/app.css" />
+  <script type="module" src="/js/validation.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <span class="brand">TrendCut</span>
+      <nav class="topnav" aria-label="Primary">
+        <a class="topnav-link is-active" href="/validation.html" aria-current="page">Validation</a>
+      </nav>
+      <a class="btn btn-ghost topbar-logout" href="/login.html">Sign in</a>
+    </div>
+  </header>
+
+  <main class="page">
+    <div class="page-error" id="page-error" hidden></div>
+
+    <header class="page-head">
+      <h1 class="page-title">Does the estimator actually work?</h1>
+      <p class="page-subtitle">
+        We check it the only honest way: feed it synthetic data with a <em>known</em>
+        maintenance calories (TDEE) and see how close it gets — across easy and hard
+        conditions, weak spots included. Every number here comes from a real run of the
+        real estimator; nothing is hand-picked.
+      </p>
+    </header>
+
+    <!-- How it works -->
+    <section class="card validation-card">
+      <h2 class="validation-h2">How the check works</h2>
+      <ol class="validation-how">
+        <li>Pick a hidden <strong>true TDEE</strong> and a calorie deficit.</li>
+        <li>Simulate a daily weight/intake log from it via the energy-balance model,
+          then corrupt it with realistic water-weight noise, refeed spikes and missing
+          days — the same confounders that swamp fat loss in real life.</li>
+        <li>Hand only the noisy, gappy log to the estimator (never the truth).</li>
+        <li>Compare its recovered TDEE to the hidden true TDEE.</li>
+      </ol>
+      <p class="validation-note" id="repro-note"></p>
+    </section>
+
+    <!-- Headline result -->
+    <section class="card validation-card">
+      <div class="validation-headline">
+        <div class="validation-headline-num">
+          <span id="overall-rate">–</span>
+          <span class="validation-headline-label">of cases within their stated tolerance</span>
+        </div>
+        <div class="validation-headline-sub" id="overall-sub"></div>
+      </div>
+
+      <div class="validation-chart-wrap">
+        <svg id="scatter" class="validation-scatter" viewBox="0 0 640 360"
+             preserveAspectRatio="xMidYMid meet" role="img"
+             aria-label="Recovered TDEE versus true TDEE scatter"></svg>
+        <p class="validation-legend">
+          <span class="legend-dot legend-pass"></span> within tolerance
+          <span class="legend-dot legend-fail"></span> outside tolerance
+          — the dashed line is perfect recovery (recovered = true).
+        </p>
+      </div>
+    </section>
+
+    <!-- Scenario matrix -->
+    <section class="card validation-card">
+      <h2 class="validation-h2">Results by scenario</h2>
+      <p class="validation-note">
+        Each scenario has a <strong>tolerance set in advance</strong> as an accuracy
+        claim — we report the real pass rate against it, including where it falls short.
+      </p>
+      <div class="validation-scenarios" id="scenarios"></div>
+    </section>
+
+    <!-- Anti-circularity -->
+    <section class="card validation-card">
+      <h2 class="validation-h2">Why this isn't circular</h2>
+      <p class="validation-note" id="mismatch-desc"></p>
+      <div class="validation-table-wrap">
+        <table class="validation-table" id="mismatch-table"></table>
+      </div>
+    </section>
+
+    <!-- Limitations -->
+    <section class="card validation-card">
+      <h2 class="validation-h2">Known limitations (stated plainly)</h2>
+      <ul class="validation-limits">
+        <li><strong>The confidence interval is likely optimistic.</strong> It's an
+          ordinary least-squares interval fit on an already-smoothed weight series,
+          which understates the true uncertainty — read it as indicative, not exact.</li>
+        <li><strong>The 7,700 kcal/kg conversion is a population average.</strong> Real
+          weight change mixes fat, lean tissue and water, so an individual's figure can
+          differ (see the mismatch section above for the resulting, predictable bias).</li>
+        <li><strong>Accuracy degrades on sparse, noisy input.</strong> The "sparse &amp;
+          noisy" scenario above is the honest weak spot: with heavy noise, frequent gaps
+          and a short window, some estimates miss the stated tolerance. That's why the
+          app withholds a number until it has enough consistent data.</li>
+      </ul>
+    </section>
+  </main>
+</body>
+</html>

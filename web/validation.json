@@ -1,0 +1,1311 @@
+{
+  "meta": {
+    "generator": "api.validation_report",
+    "assumed_energy_density": 7700.0,
+    "start_weight": 85.0,
+    "warmup_days": 40,
+    "seeds_per_cell": 5,
+    "total_cases": 135,
+    "total_passed": 126,
+    "overall_pass_rate": 0.933,
+    "anti_circularity": "The synthetic simulator's true energy density is kept separate from the estimator's assumed constant, so recovery is tested against independent ground truth \u2014 never the estimator's own assumption.",
+    "reproducibility": "Deterministic from fixed per-case seeds. Regenerate with `python -m api.validation_report`; the committed artifact is checked against a fresh run in CI so it can't drift from the estimator."
+  },
+  "scenarios": [
+    {
+      "id": "headline",
+      "label": "Headline \u2014 clean-ish cut",
+      "description": "Matched energy density, moderate autocorrelated water noise, a 28-day window and complete logging. The go/no-go case.",
+      "params": {
+        "window_days": 28,
+        "water_sd": 0.4,
+        "water_autocorr": 0.6,
+        "spike_rate": 0.0,
+        "missing_weight_rate": 0.0
+      },
+      "tolerance_kcal": 100.0,
+      "n": 45,
+      "n_passed": 45,
+      "pass_rate": 1.0,
+      "mean_abs_error": 37.7,
+      "max_abs_error": 70.3,
+      "cases": [
+        {
+          "true_tdee": 2200.0,
+          "deficit": 300.0,
+          "seed": 0,
+          "recovered_tdee": 2232.4,
+          "abs_error": 32.4,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2200.0,
+          "deficit": 300.0,
+          "seed": 1,
+          "recovered_tdee": 2196.4,
+          "abs_error": 3.6,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2200.0,
+          "deficit": 300.0,
+          "seed": 2,
+          "recovered_tdee": 2158.5,
+          "abs_error": 41.5,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2200.0,
+          "deficit": 300.0,
+          "seed": 3,
+          "recovered_tdee": 2241.7,
+          "abs_error": 41.7,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2200.0,
+          "deficit": 300.0,
+          "seed": 4,
+          "recovered_tdee": 2131.6,
+          "abs_error": 68.4,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2200.0,
+          "deficit": 500.0,
+          "seed": 0,
+          "recovered_tdee": 2231.5,
+          "abs_error": 31.5,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2200.0,
+          "deficit": 500.0,
+          "seed": 1,
+          "recovered_tdee": 2195.6,
+          "abs_error": 4.4,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2200.0,
+          "deficit": 500.0,
+          "seed": 2,
+          "recovered_tdee": 2157.7,
+          "abs_error": 42.3,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2200.0,
+          "deficit": 500.0,
+          "seed": 3,
+          "recovered_tdee": 2240.9,
+          "abs_error": 40.9,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2200.0,
+          "deficit": 500.0,
+          "seed": 4,
+          "recovered_tdee": 2130.8,
+          "abs_error": 69.2,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2200.0,
+          "deficit": 750.0,
+          "seed": 0,
+          "recovered_tdee": 2230.5,
+          "abs_error": 30.5,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2200.0,
+          "deficit": 750.0,
+          "seed": 1,
+          "recovered_tdee": 2194.5,
+          "abs_error": 5.5,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2200.0,
+          "deficit": 750.0,
+          "seed": 2,
+          "recovered_tdee": 2156.6,
+          "abs_error": 43.4,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2200.0,
+          "deficit": 750.0,
+          "seed": 3,
+          "recovered_tdee": 2239.8,
+          "abs_error": 39.8,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2200.0,
+          "deficit": 750.0,
+          "seed": 4,
+          "recovered_tdee": 2129.7,
+          "abs_error": 70.3,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2500.0,
+          "deficit": 300.0,
+          "seed": 0,
+          "recovered_tdee": 2532.4,
+          "abs_error": 32.4,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2500.0,
+          "deficit": 300.0,
+          "seed": 1,
+          "recovered_tdee": 2496.4,
+          "abs_error": 3.6,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2500.0,
+          "deficit": 300.0,
+          "seed": 2,
+          "recovered_tdee": 2458.5,
+          "abs_error": 41.5,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2500.0,
+          "deficit": 300.0,
+          "seed": 3,
+          "recovered_tdee": 2541.7,
+          "abs_error": 41.7,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2500.0,
+          "deficit": 300.0,
+          "seed": 4,
+          "recovered_tdee": 2431.6,
+          "abs_error": 68.4,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2500.0,
+          "deficit": 500.0,
+          "seed": 0,
+          "recovered_tdee": 2531.5,
+          "abs_error": 31.5,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2500.0,
+          "deficit": 500.0,
+          "seed": 1,
+          "recovered_tdee": 2495.6,
+          "abs_error": 4.4,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2500.0,
+          "deficit": 500.0,
+          "seed": 2,
+          "recovered_tdee": 2457.7,
+          "abs_error": 42.3,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2500.0,
+          "deficit": 500.0,
+          "seed": 3,
+          "recovered_tdee": 2540.9,
+          "abs_error": 40.9,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2500.0,
+          "deficit": 500.0,
+          "seed": 4,
+          "recovered_tdee": 2430.8,
+          "abs_error": 69.2,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2500.0,
+          "deficit": 750.0,
+          "seed": 0,
+          "recovered_tdee": 2530.5,
+          "abs_error": 30.5,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2500.0,
+          "deficit": 750.0,
+          "seed": 1,
+          "recovered_tdee": 2494.5,
+          "abs_error": 5.5,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2500.0,
+          "deficit": 750.0,
+          "seed": 2,
+          "recovered_tdee": 2456.6,
+          "abs_error": 43.4,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2500.0,
+          "deficit": 750.0,
+          "seed": 3,
+          "recovered_tdee": 2539.8,
+          "abs_error": 39.8,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2500.0,
+          "deficit": 750.0,
+          "seed": 4,
+          "recovered_tdee": 2429.7,
+          "abs_error": 70.3,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2800.0,
+          "deficit": 300.0,
+          "seed": 0,
+          "recovered_tdee": 2832.4,
+          "abs_error": 32.4,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2800.0,
+          "deficit": 300.0,
+          "seed": 1,
+          "recovered_tdee": 2796.4,
+          "abs_error": 3.6,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2800.0,
+          "deficit": 300.0,
+          "seed": 2,
+          "recovered_tdee": 2758.5,
+          "abs_error": 41.5,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2800.0,
+          "deficit": 300.0,
+          "seed": 3,
+          "recovered_tdee": 2841.7,
+          "abs_error": 41.7,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2800.0,
+          "deficit": 300.0,
+          "seed": 4,
+          "recovered_tdee": 2731.6,
+          "abs_error": 68.4,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2800.0,
+          "deficit": 500.0,
+          "seed": 0,
+          "recovered_tdee": 2831.5,
+          "abs_error": 31.5,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2800.0,
+          "deficit": 500.0,
+          "seed": 1,
+          "recovered_tdee": 2795.6,
+          "abs_error": 4.4,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2800.0,
+          "deficit": 500.0,
+          "seed": 2,
+          "recovered_tdee": 2757.7,
+          "abs_error": 42.3,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2800.0,
+          "deficit": 500.0,
+          "seed": 3,
+          "recovered_tdee": 2840.9,
+          "abs_error": 40.9,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2800.0,
+          "deficit": 500.0,
+          "seed": 4,
+          "recovered_tdee": 2730.8,
+          "abs_error": 69.2,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2800.0,
+          "deficit": 750.0,
+          "seed": 0,
+          "recovered_tdee": 2830.5,
+          "abs_error": 30.5,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2800.0,
+          "deficit": 750.0,
+          "seed": 1,
+          "recovered_tdee": 2794.5,
+          "abs_error": 5.5,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2800.0,
+          "deficit": 750.0,
+          "seed": 2,
+          "recovered_tdee": 2756.6,
+          "abs_error": 43.4,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2800.0,
+          "deficit": 750.0,
+          "seed": 3,
+          "recovered_tdee": 2839.8,
+          "abs_error": 39.8,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2800.0,
+          "deficit": 750.0,
+          "seed": 4,
+          "recovered_tdee": 2729.7,
+          "abs_error": 70.3,
+          "within_tolerance": true,
+          "status": "ok"
+        }
+      ]
+    },
+    {
+      "id": "robust",
+      "label": "Robust \u2014 noise, spikes & gaps",
+      "description": "Stronger AR(1) water noise, occasional refeed spikes and ~10% missing days, over a longer 42-day window.",
+      "params": {
+        "window_days": 42,
+        "water_sd": 0.6,
+        "water_autocorr": 0.7,
+        "spike_rate": 0.05,
+        "missing_weight_rate": 0.1
+      },
+      "tolerance_kcal": 150.0,
+      "n": 45,
+      "n_passed": 45,
+      "pass_rate": 1.0,
+      "mean_abs_error": 33.5,
+      "max_abs_error": 63.7,
+      "cases": [
+        {
+          "true_tdee": 2200.0,
+          "deficit": 300.0,
+          "seed": 0,
+          "recovered_tdee": 2220.3,
+          "abs_error": 20.3,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2200.0,
+          "deficit": 300.0,
+          "seed": 1,
+          "recovered_tdee": 2218.4,
+          "abs_error": 18.4,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2200.0,
+          "deficit": 300.0,
+          "seed": 2,
+          "recovered_tdee": 2218.5,
+          "abs_error": 18.5,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2200.0,
+          "deficit": 300.0,
+          "seed": 3,
+          "recovered_tdee": 2249.7,
+          "abs_error": 49.7,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2200.0,
+          "deficit": 300.0,
+          "seed": 4,
+          "recovered_tdee": 2137.2,
+          "abs_error": 62.8,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2200.0,
+          "deficit": 500.0,
+          "seed": 0,
+          "recovered_tdee": 2219.4,
+          "abs_error": 19.4,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2200.0,
+          "deficit": 500.0,
+          "seed": 1,
+          "recovered_tdee": 2217.7,
+          "abs_error": 17.7,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2200.0,
+          "deficit": 500.0,
+          "seed": 2,
+          "recovered_tdee": 2217.7,
+          "abs_error": 17.7,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2200.0,
+          "deficit": 500.0,
+          "seed": 3,
+          "recovered_tdee": 2249.7,
+          "abs_error": 49.7,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2200.0,
+          "deficit": 500.0,
+          "seed": 4,
+          "recovered_tdee": 2136.8,
+          "abs_error": 63.2,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2200.0,
+          "deficit": 750.0,
+          "seed": 0,
+          "recovered_tdee": 2218.3,
+          "abs_error": 18.3,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2200.0,
+          "deficit": 750.0,
+          "seed": 1,
+          "recovered_tdee": 2216.8,
+          "abs_error": 16.8,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2200.0,
+          "deficit": 750.0,
+          "seed": 2,
+          "recovered_tdee": 2216.8,
+          "abs_error": 16.8,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2200.0,
+          "deficit": 750.0,
+          "seed": 3,
+          "recovered_tdee": 2249.7,
+          "abs_error": 49.7,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2200.0,
+          "deficit": 750.0,
+          "seed": 4,
+          "recovered_tdee": 2136.3,
+          "abs_error": 63.7,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2500.0,
+          "deficit": 300.0,
+          "seed": 0,
+          "recovered_tdee": 2520.3,
+          "abs_error": 20.3,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2500.0,
+          "deficit": 300.0,
+          "seed": 1,
+          "recovered_tdee": 2518.4,
+          "abs_error": 18.4,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2500.0,
+          "deficit": 300.0,
+          "seed": 2,
+          "recovered_tdee": 2518.5,
+          "abs_error": 18.5,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2500.0,
+          "deficit": 300.0,
+          "seed": 3,
+          "recovered_tdee": 2549.7,
+          "abs_error": 49.7,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2500.0,
+          "deficit": 300.0,
+          "seed": 4,
+          "recovered_tdee": 2437.2,
+          "abs_error": 62.8,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2500.0,
+          "deficit": 500.0,
+          "seed": 0,
+          "recovered_tdee": 2519.4,
+          "abs_error": 19.4,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2500.0,
+          "deficit": 500.0,
+          "seed": 1,
+          "recovered_tdee": 2517.7,
+          "abs_error": 17.7,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2500.0,
+          "deficit": 500.0,
+          "seed": 2,
+          "recovered_tdee": 2517.7,
+          "abs_error": 17.7,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2500.0,
+          "deficit": 500.0,
+          "seed": 3,
+          "recovered_tdee": 2549.7,
+          "abs_error": 49.7,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2500.0,
+          "deficit": 500.0,
+          "seed": 4,
+          "recovered_tdee": 2436.8,
+          "abs_error": 63.2,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2500.0,
+          "deficit": 750.0,
+          "seed": 0,
+          "recovered_tdee": 2518.3,
+          "abs_error": 18.3,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2500.0,
+          "deficit": 750.0,
+          "seed": 1,
+          "recovered_tdee": 2516.8,
+          "abs_error": 16.8,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2500.0,
+          "deficit": 750.0,
+          "seed": 2,
+          "recovered_tdee": 2516.8,
+          "abs_error": 16.8,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2500.0,
+          "deficit": 750.0,
+          "seed": 3,
+          "recovered_tdee": 2549.7,
+          "abs_error": 49.7,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2500.0,
+          "deficit": 750.0,
+          "seed": 4,
+          "recovered_tdee": 2436.3,
+          "abs_error": 63.7,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2800.0,
+          "deficit": 300.0,
+          "seed": 0,
+          "recovered_tdee": 2820.3,
+          "abs_error": 20.3,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2800.0,
+          "deficit": 300.0,
+          "seed": 1,
+          "recovered_tdee": 2818.4,
+          "abs_error": 18.4,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2800.0,
+          "deficit": 300.0,
+          "seed": 2,
+          "recovered_tdee": 2818.5,
+          "abs_error": 18.5,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2800.0,
+          "deficit": 300.0,
+          "seed": 3,
+          "recovered_tdee": 2849.7,
+          "abs_error": 49.7,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2800.0,
+          "deficit": 300.0,
+          "seed": 4,
+          "recovered_tdee": 2737.2,
+          "abs_error": 62.8,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2800.0,
+          "deficit": 500.0,
+          "seed": 0,
+          "recovered_tdee": 2819.4,
+          "abs_error": 19.4,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2800.0,
+          "deficit": 500.0,
+          "seed": 1,
+          "recovered_tdee": 2817.7,
+          "abs_error": 17.7,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2800.0,
+          "deficit": 500.0,
+          "seed": 2,
+          "recovered_tdee": 2817.7,
+          "abs_error": 17.7,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2800.0,
+          "deficit": 500.0,
+          "seed": 3,
+          "recovered_tdee": 2849.7,
+          "abs_error": 49.7,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2800.0,
+          "deficit": 500.0,
+          "seed": 4,
+          "recovered_tdee": 2736.8,
+          "abs_error": 63.2,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2800.0,
+          "deficit": 750.0,
+          "seed": 0,
+          "recovered_tdee": 2818.3,
+          "abs_error": 18.3,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2800.0,
+          "deficit": 750.0,
+          "seed": 1,
+          "recovered_tdee": 2816.8,
+          "abs_error": 16.8,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2800.0,
+          "deficit": 750.0,
+          "seed": 2,
+          "recovered_tdee": 2816.8,
+          "abs_error": 16.8,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2800.0,
+          "deficit": 750.0,
+          "seed": 3,
+          "recovered_tdee": 2849.7,
+          "abs_error": 49.7,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2800.0,
+          "deficit": 750.0,
+          "seed": 4,
+          "recovered_tdee": 2736.3,
+          "abs_error": 63.7,
+          "within_tolerance": true,
+          "status": "ok"
+        }
+      ]
+    },
+    {
+      "id": "sparse_noisy",
+      "label": "Sparse & noisy \u2014 the weak spot",
+      "description": "Deliberately hard: heavy water noise, frequent spikes, ~30% missing weigh-ins and a short 21-day window. Where the estimator is weakest \u2014 shown honestly, not hidden.",
+      "params": {
+        "window_days": 21,
+        "water_sd": 0.9,
+        "water_autocorr": 0.7,
+        "spike_rate": 0.08,
+        "missing_weight_rate": 0.3
+      },
+      "tolerance_kcal": 250.0,
+      "n": 45,
+      "n_passed": 36,
+      "pass_rate": 0.8,
+      "mean_abs_error": 188.6,
+      "max_abs_error": 307.4,
+      "cases": [
+        {
+          "true_tdee": 2200.0,
+          "deficit": 300.0,
+          "seed": 0,
+          "recovered_tdee": 1901.6,
+          "abs_error": 298.4,
+          "within_tolerance": false,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2200.0,
+          "deficit": 300.0,
+          "seed": 1,
+          "recovered_tdee": 1983.5,
+          "abs_error": 216.5,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2200.0,
+          "deficit": 300.0,
+          "seed": 2,
+          "recovered_tdee": 1955.9,
+          "abs_error": 244.1,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2200.0,
+          "deficit": 300.0,
+          "seed": 3,
+          "recovered_tdee": 2252.2,
+          "abs_error": 52.2,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2200.0,
+          "deficit": 300.0,
+          "seed": 4,
+          "recovered_tdee": 2079.6,
+          "abs_error": 120.4,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2200.0,
+          "deficit": 500.0,
+          "seed": 0,
+          "recovered_tdee": 1897.6,
+          "abs_error": 302.4,
+          "within_tolerance": false,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2200.0,
+          "deficit": 500.0,
+          "seed": 1,
+          "recovered_tdee": 1972.6,
+          "abs_error": 227.4,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2200.0,
+          "deficit": 500.0,
+          "seed": 2,
+          "recovered_tdee": 1955.4,
+          "abs_error": 244.6,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2200.0,
+          "deficit": 500.0,
+          "seed": 3,
+          "recovered_tdee": 2251.2,
+          "abs_error": 51.2,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2200.0,
+          "deficit": 500.0,
+          "seed": 4,
+          "recovered_tdee": 2083.5,
+          "abs_error": 116.5,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2200.0,
+          "deficit": 750.0,
+          "seed": 0,
+          "recovered_tdee": 1892.6,
+          "abs_error": 307.4,
+          "within_tolerance": false,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2200.0,
+          "deficit": 750.0,
+          "seed": 1,
+          "recovered_tdee": 1958.9,
+          "abs_error": 241.1,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2200.0,
+          "deficit": 750.0,
+          "seed": 2,
+          "recovered_tdee": 1954.8,
+          "abs_error": 245.2,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2200.0,
+          "deficit": 750.0,
+          "seed": 3,
+          "recovered_tdee": 2249.9,
+          "abs_error": 49.9,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2200.0,
+          "deficit": 750.0,
+          "seed": 4,
+          "recovered_tdee": 2088.4,
+          "abs_error": 111.6,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2500.0,
+          "deficit": 300.0,
+          "seed": 0,
+          "recovered_tdee": 2201.6,
+          "abs_error": 298.4,
+          "within_tolerance": false,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2500.0,
+          "deficit": 300.0,
+          "seed": 1,
+          "recovered_tdee": 2283.5,
+          "abs_error": 216.5,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2500.0,
+          "deficit": 300.0,
+          "seed": 2,
+          "recovered_tdee": 2255.9,
+          "abs_error": 244.1,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2500.0,
+          "deficit": 300.0,
+          "seed": 3,
+          "recovered_tdee": 2552.2,
+          "abs_error": 52.2,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2500.0,
+          "deficit": 300.0,
+          "seed": 4,
+          "recovered_tdee": 2379.6,
+          "abs_error": 120.4,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2500.0,
+          "deficit": 500.0,
+          "seed": 0,
+          "recovered_tdee": 2197.6,
+          "abs_error": 302.4,
+          "within_tolerance": false,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2500.0,
+          "deficit": 500.0,
+          "seed": 1,
+          "recovered_tdee": 2272.6,
+          "abs_error": 227.4,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2500.0,
+          "deficit": 500.0,
+          "seed": 2,
+          "recovered_tdee": 2255.4,
+          "abs_error": 244.6,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2500.0,
+          "deficit": 500.0,
+          "seed": 3,
+          "recovered_tdee": 2551.2,
+          "abs_error": 51.2,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2500.0,
+          "deficit": 500.0,
+          "seed": 4,
+          "recovered_tdee": 2383.5,
+          "abs_error": 116.5,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2500.0,
+          "deficit": 750.0,
+          "seed": 0,
+          "recovered_tdee": 2192.6,
+          "abs_error": 307.4,
+          "within_tolerance": false,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2500.0,
+          "deficit": 750.0,
+          "seed": 1,
+          "recovered_tdee": 2258.9,
+          "abs_error": 241.1,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2500.0,
+          "deficit": 750.0,
+          "seed": 2,
+          "recovered_tdee": 2254.8,
+          "abs_error": 245.2,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2500.0,
+          "deficit": 750.0,
+          "seed": 3,
+          "recovered_tdee": 2549.9,
+          "abs_error": 49.9,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2500.0,
+          "deficit": 750.0,
+          "seed": 4,
+          "recovered_tdee": 2388.4,
+          "abs_error": 111.6,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2800.0,
+          "deficit": 300.0,
+          "seed": 0,
+          "recovered_tdee": 2501.6,
+          "abs_error": 298.4,
+          "within_tolerance": false,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2800.0,
+          "deficit": 300.0,
+          "seed": 1,
+          "recovered_tdee": 2583.5,
+          "abs_error": 216.5,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2800.0,
+          "deficit": 300.0,
+          "seed": 2,
+          "recovered_tdee": 2555.9,
+          "abs_error": 244.1,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2800.0,
+          "deficit": 300.0,
+          "seed": 3,
+          "recovered_tdee": 2852.2,
+          "abs_error": 52.2,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2800.0,
+          "deficit": 300.0,
+          "seed": 4,
+          "recovered_tdee": 2679.6,
+          "abs_error": 120.4,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2800.0,
+          "deficit": 500.0,
+          "seed": 0,
+          "recovered_tdee": 2497.6,
+          "abs_error": 302.4,
+          "within_tolerance": false,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2800.0,
+          "deficit": 500.0,
+          "seed": 1,
+          "recovered_tdee": 2572.6,
+          "abs_error": 227.4,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2800.0,
+          "deficit": 500.0,
+          "seed": 2,
+          "recovered_tdee": 2555.4,
+          "abs_error": 244.6,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2800.0,
+          "deficit": 500.0,
+          "seed": 3,
+          "recovered_tdee": 2851.2,
+          "abs_error": 51.2,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2800.0,
+          "deficit": 500.0,
+          "seed": 4,
+          "recovered_tdee": 2683.5,
+          "abs_error": 116.5,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2800.0,
+          "deficit": 750.0,
+          "seed": 0,
+          "recovered_tdee": 2492.6,
+          "abs_error": 307.4,
+          "within_tolerance": false,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2800.0,
+          "deficit": 750.0,
+          "seed": 1,
+          "recovered_tdee": 2558.9,
+          "abs_error": 241.1,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2800.0,
+          "deficit": 750.0,
+          "seed": 2,
+          "recovered_tdee": 2554.8,
+          "abs_error": 245.2,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2800.0,
+          "deficit": 750.0,
+          "seed": 3,
+          "recovered_tdee": 2849.9,
+          "abs_error": 49.9,
+          "within_tolerance": true,
+          "status": "ok"
+        },
+        {
+          "true_tdee": 2800.0,
+          "deficit": 750.0,
+          "seed": 4,
+          "recovered_tdee": 2688.4,
+          "abs_error": 111.6,
+          "within_tolerance": true,
+          "status": "ok"
+        }
+      ]
+    }
+  ],
+  "density_mismatch": {
+    "description": "The simulator's true energy density is set DIFFERENT from the estimator's assumed 7,700 kcal/kg. The estimate is then biased by exactly the known physical amount deficit\u00d7(assumed\u2212true)/true \u2014 not a bug, and proof the recovery tests can't be circular (the estimator is never handed its own assumption as truth).",
+    "deficit_kcal": 600.0,
+    "groups": [
+      {
+        "true_energy_density": 7000.0,
+        "assumed_energy_density": 7700.0,
+        "expected_bias_kcal": 60.0,
+        "observed_mean_bias_kcal": 53.3,
+        "n": 10
+      },
+      {
+        "true_energy_density": 8400.0,
+        "assumed_energy_density": 7700.0,
+        "expected_bias_kcal": -50.0,
+        "observed_mean_bias_kcal": -56.4,
+        "n": 10
+      }
+    ]
+  }
+}
