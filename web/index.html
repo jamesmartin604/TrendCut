@@ -51,6 +51,7 @@
         </div>
         <p class="provisional-band" id="provisional-band"></p>
         <p class="provisional-caveat" id="provisional-caveat"></p>
+        <p class="provisional-method" id="provisional-method"></p>
       </div>
 
       <p class="onboarding-hint" id="onboarding-demographics-prompt" hidden>
@@ -104,6 +105,20 @@
           <span class="chip chip-warning" id="low-conf-chip" hidden>Low confidence</span>
         </div>
         <p class="hero-ci" id="tdee-ci"></p>
+
+        <!-- Phase 5: every number is auditable. This shows the estimator's REAL chain
+             with the REAL values that produced the number above. Hidden below
+             threshold (there is no data-derived estimate to explain). -->
+        <details class="derivation" id="derivation" hidden>
+          <summary class="derivation-summary">How we calculated this</summary>
+          <div class="derivation-body">
+            <p class="derivation-intro" id="derivation-intro"></p>
+            <p class="derivation-chain" id="derivation-chain"></p>
+            <p class="derivation-ci" id="derivation-ci"></p>
+            <ul class="derivation-caveats" id="derivation-caveats"></ul>
+          </div>
+        </details>
+
         <div class="hero-footer">
           <div class="status-block">
             <span class="card-label">Status</span>

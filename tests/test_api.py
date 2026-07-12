@@ -384,6 +384,81 @@ def test_estimate_requirements_matches_estimator_and_needs_auth() -> None:
     storage.close()
 
 
+# --- transparency: derivation + low-confidence reason (Phase 5) ----------- #
+def test_derivation_reconciles_with_the_exposed_headline(client: TestClient) -> None:
+    """The audit bundle must reconcile with the number the frontend shows. Asserts
+    against the SERIALIZED response the frontend consumes (not estimator internals),
+    so an exposure/formatting bug that made the panel disagree with the headline is
+    caught here."""
+    _seed_sufficient(client)
+    tdee = client.get("/estimate").json()["tdee"]
+    assert tdee["status"] == "ok"
+    d = tdee["derivation"]
+    assert d is not None
+    # TDEE = mean_intake − slope × energy_density (the estimator's own chain).
+    reconstructed = d["mean_intake_kcal"] - d["slope_kg_per_day"] * d["energy_density"]
+    assert reconstructed == pytest.approx(tdee["tdee"], abs=1e-6)
+    # CI = TDEE ± 1.96 × slope_se × energy_density (z_95 the estimator uses).
+    half = 1.96 * d["slope_se"] * d["energy_density"]
+    assert tdee["tdee"] - half == pytest.approx(tdee["ci_low"], abs=1e-6)
+    assert tdee["tdee"] + half == pytest.approx(tdee["ci_high"], abs=1e-6)
+    # The exposed regression-point count is the estimator's valid weigh-in count.
+    assert d["n_regression_points"] == tdee["n_valid_weight_days"]
+    assert d["alpha"] == client.get("/settings").json()["alpha"]
+
+
+def test_derivation_absent_below_threshold(client: TestClient) -> None:
+    client.put("/entries/2026-01-01", json={"weight_kg": 80.0, "kcal": 2000})
+    tdee = client.get("/estimate").json()["tdee"]
+    assert tdee["status"] == "insufficient_data"
+    assert tdee["derivation"] is None  # nothing fabricated below threshold
+    assert tdee["low_confidence_reason"] is None
+
+
+def test_low_confidence_reason_implausible_over_http(client: TestClient) -> None:
+    for i in range(12):  # flat weight + absurd intake → TDEE outside plausible band
+        client.put(f"/entries/2026-06-{i + 1:02d}", json={"weight_kg": 80.0, "kcal": 7000})
+    tdee = client.get("/estimate").json()["tdee"]
+    assert tdee["status"] == "low_confidence"
+    assert tdee["low_confidence_reason"] == "implausible_value"
+    # A CI exists, so the derivation is still shown (with the honest caveats).
+    assert tdee["derivation"] is not None
+
+
+def _lc_est(tdee: float, ci_high: float, status: str = "low_confidence"):
+    """A TDEEEstimate with a chosen point + CI, to test the reason mapping across all
+    branches (a wide CI is hard to coax out of the smoothed estimator via data)."""
+    from estimator.tdee import TDEEEstimate
+
+    half = ci_high - tdee
+    return TDEEEstimate(
+        tdee=tdee,
+        ci_low=tdee - half,
+        ci_high=ci_high,
+        slope_kg_per_day=-0.02,
+        slope_se=0.001,
+        mean_intake=2000.0,
+        window_days=28,
+        n_valid_weight_days=12,
+        n_valid_intake_days=12,
+        assumed_energy_density=7700.0,
+        status=status,
+    )
+
+
+def test_low_confidence_reason_branches() -> None:
+    from api.estimation import _low_confidence_reason
+
+    # Wide CI (halfwidth 600 > 500) but a plausible value.
+    assert _low_confidence_reason(_lc_est(2000, 2600)) == "wide_interval"
+    # Implausible value (> 6000) with a tight CI.
+    assert _low_confidence_reason(_lc_est(7000, 7000.3)) == "implausible_value"
+    # Both at once.
+    assert _low_confidence_reason(_lc_est(7000, 7700)) == "wide_interval_and_implausible"
+    # Not low_confidence → no reason.
+    assert _low_confidence_reason(_lc_est(2000, 2100, status="ok")) is None
+
+
 # --- provisional (day-1) estimate contract -------------------------------- #
 _DEMOGRAPHICS = {"age": 30, "sex": "male", "height_cm": 180.0, "activity_level": "moderate"}
 

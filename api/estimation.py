@@ -19,6 +19,7 @@ import math
 import numpy as np
 
 from api.models import (
+    Derivation,
     EstimateResponse,
     PlateauResult,
     ProvisionalTDEE,
@@ -31,9 +32,50 @@ from api.provisional import provisional_tdee
 from api.storage import Entry, Settings
 from estimator.plateau import classify_plateau
 from estimator.smoothing import ewma_trend
-from estimator.tdee import estimate_tdee
+from estimator.tdee import LOW_CONF_HALFWIDTH_KCAL, PLAUSIBLE_TDEE, TDEEEstimate, estimate_tdee
 
 __all__ = ["compute_estimate", "compute_tdee_history", "entries_to_series"]
+
+
+def _derivation(est: TDEEEstimate, settings: Settings) -> Derivation | None:
+    """Bundle the real values that produced this estimate, for the transparency panel.
+
+    Pure re-exposure: every field is copied from the estimator's own result (or the α
+    it was run with) — nothing is recomputed here, so the panel can never disagree
+    with the headline. ``None`` when the estimator withheld a number.
+    """
+    if est.tdee is None or est.slope_kg_per_day is None or est.mean_intake is None:
+        return None
+    return Derivation(
+        mean_intake_kcal=est.mean_intake,
+        slope_kg_per_day=est.slope_kg_per_day,
+        slope_se=est.slope_se,
+        energy_density=est.assumed_energy_density,
+        alpha=settings.alpha,
+        # The OLS fit runs on exactly the valid weigh-in days in the window.
+        n_regression_points=est.n_valid_weight_days,
+    )
+
+
+def _low_confidence_reason(est: TDEEEstimate) -> str | None:
+    """WHY the estimator flagged low_confidence — re-derived from its OWN returned CI
+    and the estimator's own threshold constants (imported read-only), so it always
+    agrees with ``status``. NOTE the coupling: these thresholds mirror
+    ``estimate_tdee``'s defaults; if that function starts overriding them this must
+    follow. Returns None unless status is low_confidence.
+    """
+    if est.status != "low_confidence" or est.tdee is None:
+        return None
+    halfwidth = est.ci_high - est.tdee  # the estimator's own CI half-width
+    wide = halfwidth > LOW_CONF_HALFWIDTH_KCAL
+    implausible = not (PLAUSIBLE_TDEE[0] <= est.tdee <= PLAUSIBLE_TDEE[1])
+    if wide and implausible:
+        return "wide_interval_and_implausible"
+    if wide:
+        return "wide_interval"
+    if implausible:
+        return "implausible_value"
+    return None  # status was low_confidence for no re-derivable reason (shouldn't happen)
 
 
 def _latest_weight_kg(entries: list[Entry]) -> float | None:
@@ -147,6 +189,8 @@ def compute_estimate(entries: list[Entry], settings: Settings) -> EstimateRespon
             n_valid_weight_days=est.n_valid_weight_days,
             n_valid_intake_days=est.n_valid_intake_days,
             assumed_energy_density=est.assumed_energy_density,
+            derivation=_derivation(est, settings),
+            low_confidence_reason=_low_confidence_reason(est),
         ),
         plateau=PlateauResult(
             state=verdict.state,

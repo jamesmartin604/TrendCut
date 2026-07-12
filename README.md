@@ -316,6 +316,50 @@ It is deliberately hedged, and never confusable with the real estimate:
 The provisional is computed on the fly (`api/provisional.py`, outside the frozen
 estimator) and never stored — only your raw demographics are saved.
 
+## Methodology transparency (every number is auditable)
+
+TrendCut's wedge is honesty over confidence: unlike a black-box tracker, it shows its
+work **in-app, on your own live data**. Wherever a data-derived TDEE is shown, a
+collapsible **"How we calculated this"** reveals the estimator's real chain with the
+real values that produced *that* number:
+
+```
+mean intake − trend slope × energy density = TDEE
+2,150 − (−0.0421 × 7,700)                  = 2,474 kcal/day
+```
+
+* **The shown math is the estimator's own output, not a parallel calculation.** The
+  API exposes the intermediates it already computed as a `tdee.derivation` sub-object
+  (`mean_intake_kcal`, `slope_kg_per_day`, `slope_se`, `energy_density`, `alpha`,
+  `n_regression_points`); the frontend only formats them. A contract test asserts the
+  exposed values **reconcile** with the displayed TDEE and CI, so the panel can never
+  disagree with the headline. The chain is computed from full-precision values and
+  rounded only for display; if display rounding means the visible arithmetic can't
+  land exactly on the visible number, it's shown with `≈` rather than a false `=`. It
+  is shown in kilograms (the estimator's native units) so it always reconciles.
+* **The confidence interval is explained**, not just printed: what it means (~95%
+  confidence your true maintenance is in the range) and where its width comes from
+  (the standard error of your weight-trend slope).
+* **The known limitations are stated openly, including the unflattering ones** —
+  because that candour *is* the feature. Whenever a CI is shown (`ok` **and**
+  `low_confidence`): the interval is **likely optimistic** (an OLS interval fit on an
+  already-smoothed, autocorrelated series understates the true uncertainty — read it
+  as indicative); the **7,700 kcal/kg** energy density is a population average (real
+  change mixes fat, lean and water); and smoothing (EWMA, α) removes daily noise but
+  **lags** real changes. When confidence is low, the panel says **why** (a wide slope
+  interval from noisy/sparse data, or a value outside the plausible range), derived
+  from the estimator's own returned CI and thresholds.
+* **Below the data threshold there is no data-derived derivation** — the estimator
+  withholds the number, so none is fabricated. The opt-in provisional (if enabled)
+  shows its own lighter "how this generic estimate is computed" note instead; the two
+  are never presented as equally authoritative.
+
+This is purely an exposure-and-explanation layer: the frozen estimator is unchanged
+(`git diff estimator/` is empty), and its validation tests pass untouched — proof the
+computed estimate and CI are exactly as before. (A *public* validation page showing the
+estimator recovers a known TDEE on synthetic data is a separate future artifact; this
+transparency is per-number, in-app, on your own data.)
+
 ### CSV import format
 
 `POST /entries/import` takes a CSV body (the endpoint reads the raw request body,

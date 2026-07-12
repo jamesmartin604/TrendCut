@@ -12,6 +12,7 @@ import { getEstimate, getRequirements, getSettings, importEntries } from "./api.
 import { goalLineAnchors, nearestIndex } from "./chart-math.js";
 import { renderWeightChart } from "./chart.js";
 import { openEntryForm } from "./entry-form.js";
+import { caveatsForState, formatDerivation } from "./derivation.js";
 import {
   coldStartProvisionalView,
   importResultMessage,
@@ -94,6 +95,7 @@ function renderHero() {
     ciEl.textContent =
       `${tdee.n_valid_weight_days} weigh-ins · ${tdee.n_valid_intake_days} intake days ` +
       `in the last ${tdee.window_days} — keep logging and the estimate will appear.`;
+    $("derivation").hidden = true; // no data-derived estimate → nothing to audit
     return;
   }
 
@@ -105,6 +107,45 @@ function renderHero() {
   lowConf.hidden = !view.lowConfidence;
   // Low confidence: the wide CI is the story — make it the prominent line.
   ciEl.classList.toggle("is-prominent", view.ciProminent);
+
+  renderDerivation(tdee);
+}
+
+/**
+ * "How we calculated this": the estimator's real chain with the real values that
+ * produced the number above, the CI explained in plain terms, and the honest
+ * caveats (including the unflattering ones). Everything is the estimator's own
+ * output — the panel can't disagree with the headline.
+ */
+function renderDerivation(tdee) {
+  const panel = $("derivation");
+  const info = formatDerivation(tdee);
+  if (info == null) {
+    panel.hidden = true;
+    return;
+  }
+  panel.hidden = false;
+
+  $("derivation-intro").textContent =
+    "Your TDEE is your mean intake minus the energy your weight trend gained or lost " +
+    `(from ${info.regressionPoints} weigh-ins and ${info.intakeDays} intake days in the ` +
+    "window). In kilograms, the estimator's native units:";
+  $("derivation-chain").textContent = info.chainText;
+
+  if (info.ci) {
+    $("derivation-ci").hidden = false;
+    $("derivation-ci").textContent =
+      `Confidence interval ${info.ci.text}: we're about 95% confident your true ` +
+      `maintenance sits in this range. Its ±${fmtInt(info.ci.halfWidth)} kcal width comes ` +
+      "from the uncertainty (standard error) in your weight-trend slope.";
+  } else {
+    $("derivation-ci").hidden = true;
+  }
+
+  const caveats = caveatsForState(tdee.status, tdee.low_confidence_reason, info.alpha);
+  $("derivation-caveats").innerHTML = caveats
+    .map((c) => `<li class="caveat-${c.kind.replace(/_/g, "-")}">${escapeHtml(c.text)}</li>`)
+    .join("");
 }
 
 function renderPlateau() {
@@ -557,6 +598,12 @@ function renderProvisional() {
       `Wide range: ${fmtInt(view.low)}–${fmtInt(view.high)} kcal/day — a generic ` +
       "population estimate, not your data.";
     $("provisional-caveat").textContent = view.basis;
+    // Matching (small) transparency for the provisional: how this generic number is
+    // computed. Deliberately lighter than the data-derived derivation panel.
+    $("provisional-method").textContent =
+      "How this is computed: resting metabolic rate from the Mifflin–St Jeor formula " +
+      "(your age, sex, height and latest weight) × an activity multiplier, with a wide " +
+      "±25% population band.";
     block.hidden = false;
   } else if (view.kind === "add_demographics") {
     demoPrompt.hidden = false;

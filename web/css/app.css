@@ -1554,3 +1554,93 @@ body {
   line-height: 16px;
   color: var(--text-muted);
 }
+
+.provisional-method {
+  font-size: 12px;
+  line-height: 16px;
+  color: #92600a;
+  margin-top: 2px;
+}
+
+/* ---------- "How we calculated this" transparency panel ---------- */
+.derivation {
+  margin: 8px 0 4px;
+  border-top: 1px solid var(--border-hairline, rgba(0, 0, 0, 0.08));
+  padding-top: 8px;
+}
+
+.derivation-summary {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--trend-blue);
+  cursor: pointer;
+  list-style: none;
+}
+
+.derivation-summary::-webkit-details-marker {
+  display: none;
+}
+
+.derivation-summary::before {
+  content: "▸ ";
+  font-size: 10px;
+}
+
+.derivation[open] .derivation-summary::before {
+  content: "▾ ";
+}
+
+.derivation-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 8px;
+}
+
+.derivation-intro,
+.derivation-ci {
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--on-surface-variant);
+}
+
+.derivation-chain {
+  font-family: var(--font-mono, monospace);
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--on-surface);
+  background: var(--surface-container, rgba(0, 0, 0, 0.03));
+  border-radius: var(--radius-md, 10px);
+  padding: 8px 12px;
+  overflow-x: auto;
+}
+
+.derivation-caveats {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+}
+
+.derivation-caveats li {
+  font-size: 12px;
+  line-height: 17px;
+  color: var(--text-muted);
+  padding-left: 14px;
+  position: relative;
+}
+
+.derivation-caveats li::before {
+  content: "•";
+  position: absolute;
+  left: 2px;
+}
+
+/* The unflattering caveats (optimistic CI, low-confidence reason) get a slightly
+   stronger amber so candour is visible, not buried. */
+.derivation-caveats li.caveat-optimistic-ci,
+.derivation-caveats li.caveat-why-low-confidence {
+  color: #92600a;
+}

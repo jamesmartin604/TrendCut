@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 
 __all__ = [
     "AuthMeResponse",
+    "Derivation",
     "EntryResponse",
     "EntryUpsert",
     "EstimateRequirements",
@@ -102,6 +103,25 @@ class TrendPoint(BaseModel):
     trend_kg: float | None
 
 
+class Derivation(BaseModel):
+    """The real intermediate values that produced this data-derived TDEE — the audit
+    bundle for the in-app "how we calculated this" panel (Phase 5).
+
+    These are copied verbatim from the estimator's result (and the settings α it was
+    run with); nothing is recomputed. By construction they reconcile with the headline:
+    ``mean_intake_kcal - slope_kg_per_day * energy_density`` reproduces ``tdee``, and
+    ``tdee ± 1.96 * slope_se * energy_density`` reproduces the CI. Present only when a
+    data-derived estimate exists (status ``ok``/``low_confidence``).
+    """
+
+    mean_intake_kcal: float
+    slope_kg_per_day: float
+    slope_se: float
+    energy_density: float
+    alpha: float
+    n_regression_points: int  # == n_valid_weight_days; the points the OLS fit used
+
+
 class TdeeResult(BaseModel):
     status: str
     tdee: float | None
@@ -114,6 +134,9 @@ class TdeeResult(BaseModel):
     n_valid_weight_days: int
     n_valid_intake_days: int
     assumed_energy_density: float
+    # Phase 5 transparency. Both None unless a data-derived estimate exists.
+    derivation: Derivation | None = None
+    low_confidence_reason: str | None = None  # set only when status == low_confidence
 
 
 class PlateauResult(BaseModel):
