@@ -36,6 +36,12 @@ target-version = "py312"
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
 
+[tool.ruff.lint.per-file-ignores]
+# api/reset_email.py vendors Postmark's password-reset template (MIT) verbatim — its
+# long HTML/CSS lines are intentional and must NOT be reflowed (that pre-tested markup
+# is the whole point of using it), so line-length is not enforced there.
+"api/reset_email.py" = ["E501"]
+
 [tool.ruff.lint.flake8-bugbear]
 # FastAPI's dependency-injection idiom puts ``Depends(...)`` in argument defaults
 # on purpose; it is not the mutable-default footgun B008 targets.

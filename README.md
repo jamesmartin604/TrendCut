@@ -315,6 +315,23 @@ the console/CLI path:
 | `TRENDCUT_SMTP_STARTTLS` | STARTTLS on (default `1`). |
 | `TRENDCUT_BASE_URL` | Public base URL for reset links. **Required when SMTP is configured** — the app refuses to boot otherwise, rather than build a link from a (spoofable) request `Host` header and email it to a real user. |
 
+**The reset email.** The SMTP adapter sends a `multipart/alternative` message: an
+HTML body plus a mandatory plain-text part that carries the **raw reset URL** (the
+fallback that always works when a client blocks HTML or strips the button). The body
+lives **in-repo** (`api/reset_email.py`) — it's Postmark's MIT-licensed transactional
+password-reset template (attribution preserved), with only the copy adapted for
+TrendCut and the link/expiry substituted. Keeping the body in the repo (rather than a
+provider's server-side templates) is deliberate: the delivery seam stays
+**provider-agnostic** and the console/CLI path needs no email account. The stated link
+expiry is derived from `RESET_TOKEN_TTL_MINUTES`, so it can't drift from the real token
+lifetime.
+
+> **Operator note — email tracking must stay OFF.** On the Postmark (or any provider)
+> transactional stream, disable both **Open tracking** and **Link tracking**. Link
+> tracking rewrites every URL through the provider's redirector, which would turn the
+> reset link into a tracked third-party redirect — a privacy violation against the
+> data-ownership brand and an unnecessary hop between the user and their token.
+
 ## Onboarding (first run)
 
 A brand-new account has no data, and TrendCut will **not** show a TDEE number until

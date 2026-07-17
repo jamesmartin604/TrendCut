@@ -21,6 +21,8 @@ import ssl
 from email.message import EmailMessage
 from typing import Protocol, runtime_checkable
 
+from api.reset_email import render_reset_email
+
 __all__ = [
     "ConsoleResetDelivery",
     "ResetDelivery",
@@ -61,17 +63,24 @@ class SmtpResetDelivery:
         self._sender = sender
         self._use_starttls = use_starttls
 
-    def send(self, email: str, reset_url: str) -> None:
+    def _build_message(self, email: str, reset_url: str) -> EmailMessage:
+        """Build the multipart/alternative reset message (no I/O — testable).
+
+        text/plain first, then text/html: in multipart/alternative a client renders
+        the LAST part it can display, so adding HTML last makes clients prefer it while
+        the plain-text part (with the raw URL) remains the universal fallback.
+        """
+        subject, text_body, html_body = render_reset_email(reset_url)
         msg = EmailMessage()
-        msg["Subject"] = "Reset your TrendCut password"
+        msg["Subject"] = subject
         msg["From"] = self._sender
         msg["To"] = email
-        msg.set_content(
-            "We received a request to reset your TrendCut password.\n\n"
-            f"Use this link to choose a new password (it expires soon):\n{reset_url}\n\n"
-            "If you didn't request this, you can ignore this email — your password "
-            "won't change."
-        )
+        msg.set_content(text_body)  # text/plain
+        msg.add_alternative(html_body, subtype="html")  # text/html — added LAST
+        return msg
+
+    def send(self, email: str, reset_url: str) -> None:
+        msg = self._build_message(email, reset_url)
         with smtplib.SMTP(self._host, self._port, timeout=30) as smtp:
             if self._use_starttls:
                 smtp.starttls(context=ssl.create_default_context())
