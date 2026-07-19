@@ -66,11 +66,19 @@ fetches one user's series and passes it in exactly as before. See
 **[Authentication](#authentication)** for the session model, open signup, and the
 CLI bootstrap.
 
-The database is migrated **in place on first startup**, idempotently and inside one
-rolled-back-on-failure transaction: a pre-user-scoping DB has its `entries`/
-`settings` rebuilt to the composite-PK schema (existing rows backfilled to
-`DEFAULT_USER_ID`), and a pre-auth DB gains the `email`/`password_hash` columns and
-`sessions` table.
+Schema migration is an **explicit, separately-invoked step** — `python -m api.migrate`
+— never a boot-time side effect. Boot instead **verifies** the schema and refuses to
+start (naming the mismatch and telling you to run `migrate`) if it is out of date, so
+a deploy can never silently rewrite the live volume before it is snapshotted. Migration
+is idempotent and runs inside one rolled-back-on-failure transaction: a pre-user-scoping
+DB has its `entries`/`settings` rebuilt to the composite-PK schema (existing rows
+backfilled to `DEFAULT_USER_ID`), a pre-auth DB gains the `email`/`password_hash`
+columns and `sessions` table, and so on through demographics and reset-tokens.
+
+**First run (fresh local DB):** run the migration once before the first boot —
+`python -m api.migrate` — otherwise `uvicorn api.app:app` refuses to start and tells
+you exactly this. The admin CLIs (`bootstrap_user`, `reset_password`) migrate their
+target DB explicitly, so running `bootstrap_user` first also brings a fresh DB up.
 
 ## Development setup
 
@@ -126,9 +134,11 @@ every push and pull request (see
 The `api/` package is a thin FastAPI + SQLite layer over the pure estimator, and it
 also serves the static frontend in `web/` (no build step — plain HTML, hand-rolled
 CSS, and vanilla-JS ES modules). Start it with uvicorn (after
-`pip install -e ".[dev]"`):
+`pip install -e ".[dev]"`). On a fresh checkout, create the schema **once** first —
+boot verifies but never migrates:
 
 ```bash
+python -m api.migrate        # one-time on a fresh DB (idempotent; no-op if current)
 uvicorn api.app:app --reload
 ```
 
@@ -588,21 +598,23 @@ GitHub Actions secret, which **you** populate (nothing secret is committed):
 
 You can also deploy by hand at any time with `fly deploy`.
 
-> **Snapshot the volume before deploying any release that changes the schema** — the
-> multi-user-readiness rebuild, the auth/demographics column adds, and the
-> password-reset-tokens table all land on **first boot** via the in-place
-> auto-migrate-on-startup pattern against the live `/data/trendcut.db`. Each step is
-> transactional and idempotent (the reset-tokens table is an additive
-> `CREATE TABLE IF NOT EXISTS`), but take a fresh snapshot first so a rollback is
-> trivial if anything looks wrong:
+> **Schema changes are deployed as an explicit step — boot no longer migrates.** A
+> release that adds schema (the multi-user rebuild, auth/demographics columns, the
+> reset-tokens table) will now **refuse to start** if the volume is behind, naming the
+> mismatch, instead of silently rewriting `/data/trendcut.db`. The deploy runbook is:
 > ```bash
-> fly volumes list                     # find the volume id
-> fly volumes snapshots create <volume-id>
+> fly volumes list                          # find the volume id
+> fly volumes snapshots create <volume-id>  # 1. snapshot FIRST (rollback insurance)
+> fly ssh console -C 'python -m api.migrate' # 2. run the explicit migration on the volume
+> fly deploy                                 # 3. deploy; boot then verifies and starts
 > ```
-> Before running any manual migration/inspection against the file, make sure
-> **nothing else holds it open** (a stray `--reload` process, DB Browser, an
-> editor's SQLite extension) — a second writer is the usual cause of
-> `database is locked`. Inspect with DB Browser in **read-only** mode.
+> Each migration step is transactional and idempotent, so if the volume is already at
+> the target schema, `migrate` is a no-op and step 2 can be skipped — the new boot
+> verification confirms this (it passes with no migrate when the schema already matches).
+> Before running any migration/inspection against the file, make sure **nothing else
+> holds it open** (a stray `--reload` process, DB Browser, an editor's SQLite extension)
+> — a second writer is the usual cause of `database is locked`. Inspect with DB Browser
+> in **read-only** mode.
 
 ### Backups and restore
 

@@ -18,7 +18,7 @@ from api.storage import DEFAULT_USER_ID, Storage
 
 @pytest.fixture
 def store() -> Storage:
-    s = Storage(":memory:")
+    s = Storage.migrated(":memory:")
     yield s
     s.close()
 

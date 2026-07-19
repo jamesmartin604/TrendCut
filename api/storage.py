@@ -40,12 +40,59 @@ import threading
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
-__all__ = ["DEFAULT_USER_ID", "Entry", "Settings", "Storage", "User"]
+__all__ = [
+    "DEFAULT_USER_ID",
+    "Entry",
+    "SchemaOutOfDateError",
+    "Settings",
+    "Storage",
+    "User",
+]
 
 # The implicit user for the (still single-user) HTTP surface. Phase 1 seeds and
 # backfills everything to this id; Phase 2's auth replaces the API seam that
 # resolves it, not this constant's role as "the original account".
 DEFAULT_USER_ID = 1
+
+
+class SchemaOutOfDateError(RuntimeError):
+    """Raised at boot when the database schema is missing tables/columns the code
+    requires. The app refuses to start (rather than silently migrating) so the
+    operator can snapshot the volume and run ``python -m api.migrate`` deliberately."""
+
+
+# The schema the current code REQUIRES to run. Boot verifies against this and
+# refuses to start on any mismatch; migrate() is what brings a DB up to it. This is
+# a *required-columns-subset* contract: every listed table/column MUST be present,
+# but extra columns (or tables) never fail verification — so a volume that is ahead
+# of, or incidentally augmented beyond, this baseline still boots. Keep in lockstep
+# with _create_fresh_schema and the _ensure_* migration steps.
+_EXPECTED_SCHEMA: dict[str, set[str]] = {
+    "users": {"id", "email", "password_hash", "created_at"},
+    "entries": {"user_id", "date", "weight_kg", "kcal", "created_at", "updated_at"},
+    "settings": {
+        "user_id",
+        "alpha",
+        "window_days",
+        "energy_density",
+        "expected_deficit_kcal",
+        "target_weight",
+        "target_date",
+        "units",
+        "age",
+        "sex",
+        "height_cm",
+        "activity_level",
+    },
+    "sessions": {"token_hash", "user_id", "created_at", "expires_at"},
+    "password_reset_tokens": {
+        "token_hash",
+        "user_id",
+        "created_at",
+        "expires_at",
+        "used_at",
+    },
+}
 
 
 @dataclass(frozen=True)
@@ -127,21 +174,40 @@ class Storage:
         # timeout=30: if some *other* connection to the same file (a second app
         # process, a DB browser) briefly holds the write lock, wait for it instead
         # of raising "database is locked" immediately.
+        self._db_path = db_path
         self._conn = sqlite3.connect(db_path, check_same_thread=False, timeout=30.0)
         self._conn.row_factory = sqlite3.Row
         # Enforce foreign keys (off by default in sqlite3) so an entry/settings row
         # can never reference a non-existent user. MUST run outside any transaction
         # — SQLite silently ignores this pragma mid-transaction — so it is set here,
-        # before _init_schema opens the migration's BEGIN IMMEDIATE.
+        # before migrate() opens the migration's BEGIN IMMEDIATE.
         self._conn.execute("PRAGMA foreign_keys = ON")
         self._lock = threading.Lock()
-        self._init_schema()
+        # DELIBERATELY no schema work here: construction is side-effect-free so that
+        # merely opening the DB (importing the app, an admin CLI, boot verification)
+        # never mutates the volume. Schema creation/migration is the explicit
+        # migrate() step (python -m api.migrate); boot only verify_schema()s.
+
+    @classmethod
+    def migrated(cls, db_path: str = ":memory:") -> Storage:
+        """Construct a Storage and bring its schema up to date, then return it.
+
+        A convenience for the migrate CLI, admin CLIs, and tests: an *explicit*,
+        clearly-named opt-in to migration (unlike the old constructor side effect).
+        The app's boot path never calls this — it verify_schema()s instead."""
+        store = cls(db_path)
+        store.migrate()
+        return store
 
     # --- schema / migration ------------------------------------------------ #
-    def _init_schema(self) -> None:
+    def migrate(self) -> None:
         """Create the schema, or migrate an old single-user DB in place.
 
-        Three cases, all idempotent (safe to run on every startup):
+        The explicit migration step (``python -m api.migrate`` invokes this). Was
+        formerly run from ``__init__`` on every open; it is now a deliberate call so
+        boot can verify-and-refuse rather than silently mutate the volume.
+
+        Three cases, all idempotent (safe to run repeatedly):
 
         * fresh DB — create the user-scoped tables and seed the default user;
         * already migrated — ensure the default user + its settings exist, done;
@@ -165,6 +231,39 @@ class Storage:
             self._ensure_auth_schema()
             self._ensure_demographics_schema()
             self._ensure_reset_tokens_schema()
+
+    def verify_schema(self) -> list[str]:
+        """Read-only check that the DB has everything the code requires.
+
+        Returns a list of human-readable problems (empty ⇒ the schema is current).
+        Touches no data and writes nothing — safe to call on the live volume at boot.
+        A *required-columns-subset* check: extra columns/tables are fine, so a volume
+        that is ahead of this baseline still passes (protects the live data)."""
+        problems: list[str] = []
+        for table, required in _EXPECTED_SCHEMA.items():
+            if not self._table_exists(table):
+                problems.append(f"missing table '{table}'")
+                continue
+            missing = required - self._columns(table)
+            if missing:
+                cols = ", ".join(sorted(missing))
+                problems.append(f"table '{table}' is missing column(s): {cols}")
+        return problems
+
+    def verify_or_raise(self) -> None:
+        """Raise :class:`SchemaOutOfDateError` if the schema is out of date.
+
+        Boot calls this instead of migrating: it names each mismatch and tells the
+        operator exactly how to fix it, rather than silently mutating the volume."""
+        problems = self.verify_schema()
+        if problems:
+            bullets = "\n".join(f"  - {p}" for p in problems)
+            raise SchemaOutOfDateError(
+                f"Database schema at {self._db_path!r} is out of date; refusing to "
+                f"start (boot does not migrate).\n{bullets}\n\n"
+                f"Snapshot the volume, then run:  python -m api.migrate"
+                f"  (against TRENDCUT_DB={self._db_path!r})"
+            )
 
     def _table_exists(self, name: str) -> bool:
         row = self._conn.execute(

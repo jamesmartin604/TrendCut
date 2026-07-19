@@ -1,7 +1,7 @@
 """Migration test: legacy single-user DB -> user-scoped schema (Phase 1).
 
 The live DB on Fly holds real data, so the in-place migration in
-:meth:`api.storage.Storage._init_schema` must lose nothing and attribute every
+:meth:`api.storage.Storage.migrate` must lose nothing and attribute every
 existing row to the default user. These tests build a pre-migration DB with raw
 ``sqlite3`` (the *old* schema — ``entries`` keyed by ``date``, single ``settings``
 row), open :class:`Storage` on it (which triggers the migration), and assert the
@@ -77,7 +77,7 @@ def legacy_db_path(tmp_path) -> str:
 
 
 def test_migration_preserves_all_entries_for_default_user(legacy_db_path: str) -> None:
-    store = Storage(legacy_db_path)
+    store = Storage.migrated(legacy_db_path)
     try:
         entries = store.list_entries(DEFAULT_USER_ID)
         # Every legacy row survives, values intact, attributed to the default user.
@@ -92,7 +92,7 @@ def test_migration_preserves_all_entries_for_default_user(legacy_db_path: str) -
 
 
 def test_migration_preserves_settings_values(legacy_db_path: str) -> None:
-    store = Storage(legacy_db_path)
+    store = Storage.migrated(legacy_db_path)
     try:
         s = store.get_settings(DEFAULT_USER_ID)
         # The customised legacy settings are carried over verbatim — NOT the defaults.
@@ -106,7 +106,7 @@ def test_migration_preserves_settings_values(legacy_db_path: str) -> None:
 
 
 def test_migration_produces_composite_primary_key(legacy_db_path: str) -> None:
-    store = Storage(legacy_db_path)
+    store = Storage.migrated(legacy_db_path)
     try:
         conn = store._conn  # noqa: SLF001 - inspecting schema shape is the point
         cols = conn.execute("PRAGMA table_info(entries)").fetchall()
@@ -122,11 +122,11 @@ def test_migration_produces_composite_primary_key(legacy_db_path: str) -> None:
 
 def test_migration_is_idempotent(legacy_db_path: str) -> None:
     # First open migrates; second open must be a no-op (already user-scoped).
-    first = Storage(legacy_db_path)
+    first = Storage.migrated(legacy_db_path)
     first_dates = [e.date for e in first.list_entries(DEFAULT_USER_ID)]
     first.close()
 
-    second = Storage(legacy_db_path)
+    second = Storage.migrated(legacy_db_path)
     try:
         assert [e.date for e in second.list_entries(DEFAULT_USER_ID)] == first_dates
         assert second.get_settings(DEFAULT_USER_ID).units == "lb"
@@ -140,7 +140,7 @@ def test_migration_is_idempotent(legacy_db_path: str) -> None:
 def test_migrated_db_enforces_foreign_keys(legacy_db_path: str) -> None:
     """After migration the FK is live: an orphan entry is rejected on the real
     (file-backed) DB, not just in-memory."""
-    store = Storage(legacy_db_path)
+    store = Storage.migrated(legacy_db_path)
     try:
         with pytest.raises(sqlite3.IntegrityError):
             store.upsert_entry(9999, "2026-02-01", 70.0, 1800)
@@ -152,7 +152,7 @@ def test_migrated_db_enforces_foreign_keys(legacy_db_path: str) -> None:
 # A legacy DB migrates through BOTH steps at once (user-scoping then auth); a
 # Phase-1 DB (already user-scoped, no auth columns) exercises just the auth step.
 def test_legacy_db_gains_auth_schema(legacy_db_path: str) -> None:
-    store = Storage(legacy_db_path)
+    store = Storage.migrated(legacy_db_path)
     try:
         conn = store._conn  # noqa: SLF001
         user_cols = {r["name"] for r in conn.execute("PRAGMA table_info(users)")}
@@ -201,7 +201,7 @@ def test_phase1_db_gains_auth_schema_without_data_loss(tmp_path) -> None:
     path = str(tmp_path / "phase1.db")
     _make_phase1_db(path)
 
-    store = Storage(path)
+    store = Storage.migrated(path)
     try:
         # Auth columns + sessions added; existing entries/settings untouched.
         assert len(store.list_entries(DEFAULT_USER_ID)) == 2
@@ -214,7 +214,7 @@ def test_phase1_db_gains_auth_schema_without_data_loss(tmp_path) -> None:
         store.close()
 
     # Idempotent: re-opening the already-upgraded DB is a no-op.
-    again = Storage(path)
+    again = Storage.migrated(path)
     try:
         assert len(again.list_entries(DEFAULT_USER_ID)) == 2
         assert again.get_user_by_email("u@test.local") is not None
@@ -226,7 +226,7 @@ def test_phase1_db_gains_auth_schema_without_data_loss(tmp_path) -> None:
 def test_legacy_db_gains_demographics_columns(legacy_db_path: str) -> None:
     # The full migration chain (legacy → user-scoped → auth → demographics) leaves
     # the settings table with the Phase-4 columns, all NULL, data preserved.
-    store = Storage(legacy_db_path)
+    store = Storage.migrated(legacy_db_path)
     try:
         cols = {r["name"] for r in store._conn.execute("PRAGMA table_info(settings)")}  # noqa: SLF001
         assert {"age", "sex", "height_cm", "activity_level"} <= cols
@@ -266,7 +266,7 @@ def test_phase3_db_gains_demographics_without_data_loss(tmp_path) -> None:
     conn.commit()
     conn.close()
 
-    store = Storage(path)
+    store = Storage.migrated(path)
     try:
         cols = {r["name"] for r in store._conn.execute("PRAGMA table_info(settings)")}  # noqa: SLF001
         assert {"age", "sex", "height_cm", "activity_level"} <= cols
@@ -282,7 +282,7 @@ def test_phase3_db_gains_demographics_without_data_loss(tmp_path) -> None:
 # --- password-reset-tokens migration -------------------------------------- #
 def test_legacy_db_gains_reset_tokens_table(legacy_db_path: str) -> None:
     # The full migration chain also creates the password_reset_tokens table.
-    store = Storage(legacy_db_path)
+    store = Storage.migrated(legacy_db_path)
     try:
         assert (
             store._conn.execute(  # noqa: SLF001
@@ -328,7 +328,7 @@ def test_pre_reset_db_gains_tokens_table_without_data_loss(tmp_path) -> None:
     conn.commit()
     conn.close()
 
-    store = Storage(path)
+    store = Storage.migrated(path)
     try:
         assert (
             store._conn.execute(  # noqa: SLF001
@@ -346,7 +346,7 @@ def test_pre_reset_db_gains_tokens_table_without_data_loss(tmp_path) -> None:
         store.close()
 
     # Idempotent: re-opening the upgraded DB is a no-op.
-    again = Storage(path)
+    again = Storage.migrated(path)
     try:
         assert len(again.list_entries(DEFAULT_USER_ID)) == 1
     finally:

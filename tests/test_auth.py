@@ -25,7 +25,7 @@ _PASSWORD = "correct horse battery staple"
 
 @pytest.fixture
 def storage() -> Storage:
-    s = Storage(":memory:")
+    s = Storage.migrated(":memory:")
     yield s
     s.close()
 

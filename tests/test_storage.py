@@ -2,7 +2,7 @@
 
 These prove the SQLite persistence layer is correct *without* spinning up the HTTP
 layer — the whole point of keeping :mod:`api.storage` framework-free. Every test
-uses an isolated in-memory database (``Storage(":memory:")``), so there is no
+uses an isolated in-memory database (``Storage.migrated(":memory:")``), so there is no
 shared state and no reliance on a real DB file.
 
 The storage layer is user-scoped (Phase 1 multi-user readiness): every method
@@ -23,7 +23,7 @@ from api.storage import Storage
 
 @pytest.fixture
 def store() -> Storage:
-    s = Storage(":memory:")
+    s = Storage.migrated(":memory:")
     yield s
     s.close()
 

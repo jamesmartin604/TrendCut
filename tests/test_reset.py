@@ -41,7 +41,7 @@ def delivery() -> FakeDelivery:
 
 @pytest.fixture
 def storage() -> Storage:
-    s = Storage(":memory:")
+    s = Storage.migrated(":memory:")
     yield s
     s.close()
 

@@ -180,6 +180,12 @@ def create_app(
     """
     app = FastAPI(title="TrendCut API", version="0.1.0")
     app.state.storage = storage or Storage(os.environ.get("TRENDCUT_DB", "trendcut.db"))
+    # Boot verifies the schema; it never migrates. An out-of-date/fresh DB raises
+    # SchemaOutOfDateError naming the mismatch and telling the operator to run
+    # `python -m api.migrate` — so a deploy can't silently rewrite the live volume
+    # before it's snapshotted. Applies to the injected test storage too, so tests
+    # pass a Storage.migrated(...).
+    app.state.storage.verify_or_raise()
     cookie_secure = _resolve_cookie_secure(cookie_secure)
     reset_delivery = reset_delivery or build_reset_delivery_from_env()
 

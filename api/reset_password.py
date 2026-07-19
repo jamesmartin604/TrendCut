@@ -61,7 +61,9 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    store = Storage(args.db)
+    # migrated(): construction no longer auto-creates the schema, so make the migrate
+    # explicit here rather than relying on the removed constructor side effect.
+    store = Storage.migrated(args.db)
     try:
         url = generate_reset(store, args.email, args.base_url)
     except ResetError as exc:

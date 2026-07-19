@@ -91,7 +91,11 @@ def main(argv: list[str] | None = None) -> int:
             print("Passwords did not match.", file=sys.stderr)
             return 2
 
-    store = Storage(args.db)
+    # migrated(): construction no longer auto-creates the schema, so make the migrate
+    # explicit here (this CLI is typically the first thing run on a fresh DB — it must
+    # still work in one step, and the migration is now a visible call, not a hidden
+    # constructor side effect).
+    store = Storage.migrated(args.db)
     try:
         message = bootstrap(store, args.email, password)
     except BootstrapError as exc:

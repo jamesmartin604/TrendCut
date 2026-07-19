@@ -39,7 +39,7 @@ _TEST_PASSWORD = "correct horse battery staple"
 
 @pytest.fixture
 def client() -> TestClient:
-    storage = Storage(":memory:")
+    storage = Storage.migrated(":memory:")
     bootstrap(storage, _TEST_EMAIL, _TEST_PASSWORD)
     app = create_app(storage, cookie_secure=False)
     with TestClient(app) as c:
@@ -405,7 +405,7 @@ def test_estimate_requirements_matches_estimator_and_needs_auth() -> None:
     between it and what the onboarding UI tells users."""
     from estimator.tdee import MIN_INTAKE_DAYS, MIN_WEIGHT_DAYS
 
-    storage = Storage(":memory:")
+    storage = Storage.migrated(":memory:")
     app = create_app(storage, cookie_secure=False)
     with TestClient(app) as c:
         # Auth-gated like the rest of the dashboard.
@@ -425,7 +425,7 @@ def test_validation_page_and_artifact_are_public() -> None:
     """The validation page + its data are static assets served with NO auth (a
     stranger evaluating the product has no account). Uses a fresh client that never
     logs in."""
-    storage = Storage(":memory:")
+    storage = Storage.migrated(":memory:")
     app = create_app(storage, cookie_secure=False)
     with TestClient(app) as c:
         # No session, yet both are reachable (200, not 401 / no login redirect).
@@ -598,7 +598,7 @@ def test_register_new_account_then_use_it() -> None:
     """Smoke test for the public /auth/register route: a fresh, unauthenticated
     client can create an account and is immediately authenticated on the data
     routes. (Uses its own storage so it doesn't depend on the pre-seeded fixture.)"""
-    storage = Storage(":memory:")
+    storage = Storage.migrated(":memory:")
     app = create_app(storage, cookie_secure=False)
     with TestClient(app) as c:
         # No session before signup.
