@@ -44,6 +44,7 @@ from api.estimation import compute_estimate, compute_tdee_history
 from api.guards import entry_warnings
 from api.models import (
     AuthMeResponse,
+    DeleteAllResult,
     EntryResponse,
     EntryUpsert,
     EstimateRequirements,
@@ -364,6 +365,18 @@ def create_app(
         if format == "csv":
             return PlainTextResponse(content=entries_to_csv(entries), media_type="text/csv")
         raise HTTPException(status_code=422, detail="format must be 'csv' or 'json'")
+
+    # Literal path, declared before ``/entries/{date}`` so "delete-all" is never
+    # captured as a date. User-scoped delete of this user's entries only; the
+    # account, settings, target, and demographics are left intact and the session
+    # stays valid. Derived-not-stored means clearing entries is sufficient — there is
+    # no cached trend/TDEE to purge.
+    @app.post("/entries/delete-all", response_model=DeleteAllResult)
+    def delete_all_entries(
+        store: Storage = Depends(get_storage),
+        user_id: int = Depends(get_current_user_id),
+    ) -> DeleteAllResult:
+        return DeleteAllResult(deleted=store.delete_all_entries(user_id))
 
     # --- entries ----------------------------------------------------------- #
     @app.put("/entries/{date}", response_model=EntryResponse)

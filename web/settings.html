@@ -226,6 +226,42 @@
         </div>
       </div>
     </section>
+
+    <!-- Danger zone: destructive, kept last and visually separated from Backup so
+         "Delete all data" is never adjacent to the Export/Import buttons. -->
+    <section class="settings-group">
+      <h2 class="settings-group-label">Danger zone</h2>
+      <div class="settings-card settings-card-danger">
+        <div class="settings-row settings-row-stack">
+          <span class="settings-row-label">Delete all data</span>
+          <p class="settings-hint">
+            Permanently removes every logged entry (weigh-ins and calories). Your
+            account, settings, target, and demographics are kept, and you stay signed
+            in. This cannot be undone — export a backup first if you want a copy.
+          </p>
+          <div class="export-actions">
+            <button class="btn btn-danger" type="button" id="delete-all-btn">
+              Delete all data
+            </button>
+          </div>
+          <div class="form-warnings" id="delete-all-confirm" hidden>
+            <span>
+              This permanently clears ALL your logged entries. There is no undo.
+            </span>
+            <div class="export-actions">
+              <button class="btn btn-danger" type="button" id="delete-all-confirm-btn">
+                Delete everything
+              </button>
+              <button class="btn btn-ghost" type="button" id="delete-all-cancel-btn">
+                Cancel
+              </button>
+            </div>
+          </div>
+          <p class="settings-hint" id="delete-all-summary" hidden></p>
+          <div class="form-error" id="delete-all-error" hidden></div>
+        </div>
+      </div>
+    </section>
   </main>
 </body>
 </html>

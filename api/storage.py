@@ -697,6 +697,22 @@ class Storage:
             self._conn.commit()
         return cur.rowcount > 0
 
+    def delete_all_entries(self, user_id: int) -> int:
+        """Delete ALL of this user's entries in one transaction; return the count.
+
+        User-scoped by construction (``WHERE user_id = ?``) — never a global wipe.
+        Only ``entries`` rows go: the account, settings, target, and demographics are
+        untouched. Atomic like :meth:`upsert_entries` — one BEGIN…COMMIT, rolled back
+        on any failure so a partial delete can never be left committed."""
+        with self._lock:
+            try:
+                cur = self._conn.execute("DELETE FROM entries WHERE user_id = ?", (user_id,))
+                self._conn.commit()
+            except Exception:
+                self._conn.rollback()
+                raise
+        return cur.rowcount
+
     # --- settings ---------------------------------------------------------- #
     def get_settings(self, user_id: int) -> Settings:
         with self._lock:

@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 
 __all__ = [
     "AuthMeResponse",
+    "DeleteAllResult",
     "Derivation",
     "EntryResponse",
     "EntryUpsert",
@@ -106,6 +107,10 @@ class SettingsResponse(BaseModel):
 class ImportResult(BaseModel):
     imported: int
     warnings: list[str] = []
+
+
+class DeleteAllResult(BaseModel):
+    deleted: int
 
 
 class TrendPoint(BaseModel):

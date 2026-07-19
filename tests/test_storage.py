@@ -231,6 +231,34 @@ def test_delete_does_not_cross_users(store: Storage) -> None:
     assert store.delete_entry(U, "2026-01-01") is False
 
 
+def test_delete_all_entries_is_user_scoped(store: Storage) -> None:
+    """delete_all_entries removes every entry for the target user only; a second
+    user's entries and the first user's settings/target are left intact."""
+    other = store.create_user()
+    store.upsert_entry(U, "2026-01-01", 80.0, 2000)
+    store.upsert_entry(U, "2026-01-02", 79.8, 2100)
+    store.upsert_entry(other, "2026-01-01", 60.0, 1500)
+    # Give the first user a target so we can prove settings survive the wipe.
+    store.update_settings(U, target_weight=75.0, target_date="2026-06-01")
+
+    deleted = store.delete_all_entries(U)
+
+    assert deleted == 2
+    assert store.list_entries(U) == []
+    # The other user's row is untouched.
+    assert [e.date for e in store.list_entries(other)] == ["2026-01-01"]
+    assert store.get_entry(other, "2026-01-01").weight_kg == 60.0
+    # Settings/target for the wiped user survive.
+    settings = store.get_settings(U)
+    assert settings.target_weight == 75.0
+    assert settings.target_date == "2026-06-01"
+
+
+def test_delete_all_entries_on_empty_is_zero(store: Storage) -> None:
+    """Deleting when there is nothing to delete is a clean no-op returning 0."""
+    assert store.delete_all_entries(U) == 0
+
+
 def test_orphan_user_id_is_rejected(store: Storage) -> None:
     """Foreign keys are enforced: an entry referencing a non-existent user is
     rejected at the DB level (the Phase-2 invariant that every row has a real

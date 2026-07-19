@@ -73,6 +73,15 @@ export function importEntries(csvText) {
 }
 
 /**
+ * POST /entries/delete-all — permanently delete all of the current user's entries.
+ * Account, settings, target, and demographics are kept and the session stays valid.
+ * Returns { deleted } (how many rows were removed).
+ */
+export function deleteAllEntries() {
+  return fetch("/entries/delete-all", { method: "POST" }).then(asJson);
+}
+
+/**
  * PUT /settings — partial update of the estimator/plan knobs (α, window, target
  * weight/date, units, …). Only the keys present are changed. Returns the full
  * settings after the update.

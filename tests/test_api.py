@@ -126,6 +126,41 @@ def test_invalid_date_rejected(client: TestClient) -> None:
     assert client.put("/entries/not-a-date", json={"weight_kg": 80.0}).status_code == 422
 
 
+def test_delete_all_entries_round_trip(client: TestClient) -> None:
+    """Seed a real estimate, wipe every entry, and prove the API returns to the
+    honest insufficient-data state (not a crash) with settings preserved."""
+    dates = _seed_sufficient(client)
+    # A target set beforehand must survive the wipe.
+    client.put("/settings", json={"target_weight": 75.0})
+    # Sanity: with enough data the estimate is real before we delete.
+    assert client.get("/estimate").json()["tdee"]["status"] != "insufficient_data"
+
+    r = client.post("/entries/delete-all")
+    assert r.status_code == 200
+    assert r.json() == {"deleted": len(dates)}
+
+    # Every entry is gone.
+    assert client.get("/entries").json() == []
+
+    # /estimate degrades cleanly to the empty-state contract — no fabricated number.
+    est = client.get("/estimate").json()
+    assert est["n_entries"] == 0
+    assert est["trend"] == []
+    assert est["tdee"]["status"] == "insufficient_data"
+    assert est["tdee"]["tdee"] is None
+    assert est["plateau"]["state"] == "undetermined"
+
+    # /tdee-history has no plotted estimates left (all points null, or none).
+    hist = client.get("/tdee-history").json()
+    assert all(p["tdee"] is None for p in hist["points"])
+
+    # Settings/target are untouched by the entry wipe.
+    assert client.get("/settings").json()["target_weight"] == 75.0
+
+    # Deleting again is a clean no-op.
+    assert client.post("/entries/delete-all").json() == {"deleted": 0}
+
+
 # --- settings ------------------------------------------------------------- #
 def test_settings_get_and_update(client: TestClient) -> None:
     defaults = client.get("/settings").json()

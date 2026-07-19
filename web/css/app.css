@@ -603,6 +603,23 @@ body {
   background: var(--surface-container-low);
 }
 
+.btn-danger {
+  background: var(--surface);
+  color: #ba1a1a;
+  border: 1px solid rgba(186, 26, 26, 0.4);
+}
+
+.btn-danger:hover {
+  background: rgba(186, 26, 26, 0.08);
+  border-color: #ba1a1a;
+}
+
+.btn-danger:disabled {
+  opacity: 0.5;
+  cursor: default;
+  transform: none;
+}
+
 .btn-wide {
   height: 48px;
   padding: 0 32px;
@@ -952,6 +969,10 @@ body {
   border-radius: var(--radius-card);
   box-shadow: var(--card-shadow);
   overflow: hidden;
+}
+
+.settings-card-danger {
+  border-color: rgba(186, 26, 26, 0.35);
 }
 
 .settings-row {

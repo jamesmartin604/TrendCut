@@ -9,7 +9,7 @@
  * save (same discipline as the log-entry guards).
  */
 
-import { getSettings, importEntries, updateSettings } from "./api.js";
+import { deleteAllEntries, getSettings, importEntries, updateSettings } from "./api.js";
 import { importResultMessage } from "./onboarding.js";
 import {
   cmToDisplay,
@@ -306,6 +306,43 @@ function renderImportResult(result) {
   }
 }
 
+// ---------- delete all data ---------- //
+
+// The destructive POST fires only on the explicit confirm click, never on the
+// first "Delete all data" click (which merely arms the inline confirm block —
+// mirroring the import confirm flow, since there is no undo).
+function armDeleteAll() {
+  $("delete-all-summary").hidden = true;
+  $("delete-all-error").hidden = true;
+  $("delete-all-confirm").hidden = false;
+}
+
+function cancelDeleteAll() {
+  $("delete-all-confirm").hidden = true;
+}
+
+async function runDeleteAll() {
+  const btn = $("delete-all-confirm-btn");
+  btn.disabled = true;
+  btn.textContent = "Deleting…";
+  $("delete-all-error").hidden = true;
+  try {
+    const { deleted } = await deleteAllEntries();
+    $("delete-all-summary").textContent =
+      deleted === 0
+        ? "There were no entries to delete."
+        : `Deleted ${deleted} entr${deleted === 1 ? "y" : "ies"}. Your settings and target are unchanged.`;
+    $("delete-all-summary").hidden = false;
+  } catch (err) {
+    $("delete-all-error").textContent = `Couldn't delete: ${err.message}. Nothing may have changed — check History.`;
+    $("delete-all-error").hidden = false;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Delete everything";
+    $("delete-all-confirm").hidden = true;
+  }
+}
+
 // ---------- wiring ---------- //
 
 function init() {
@@ -342,6 +379,10 @@ function init() {
   $("import-file").addEventListener("change", (e) => onImportFilePicked(e.target.files[0]));
   $("import-confirm-btn").addEventListener("click", runImport);
   $("import-cancel-btn").addEventListener("click", resetImportUi);
+
+  $("delete-all-btn").addEventListener("click", armDeleteAll);
+  $("delete-all-confirm-btn").addEventListener("click", runDeleteAll);
+  $("delete-all-cancel-btn").addEventListener("click", cancelDeleteAll);
 
   load().catch((err) => {
     const el = $("page-error");
