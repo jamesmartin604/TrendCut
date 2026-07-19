@@ -76,6 +76,25 @@ export function nearestIndex(px, x0, x1, n) {
 }
 
 /**
+ * Starting from `idx`, the nearest index whose `values[i]` is a real number (not
+ * null/NaN), scanning symmetrically outward (ties resolve to the earlier index);
+ * `-1` if none qualify. This is how a tooltip skips gaps: `nearestIndex` finds the
+ * column under the cursor, then this snaps to the closest point that actually has a
+ * value to show (e.g. the TDEE chart's `insufficient_data` days carry no estimate).
+ */
+export function nearestDefinedIndex(values, idx) {
+  const defined = (i) => {
+    const v = values[i];
+    return i >= 0 && i < values.length && v != null && !Number.isNaN(v);
+  };
+  for (let d = 0; d < values.length; d += 1) {
+    if (defined(idx - d)) return idx - d;
+    if (defined(idx + d)) return idx + d;
+  }
+  return -1;
+}
+
+/**
  * "Nice" tick values covering [lo, hi]: picks a 1/2/5×10^k step so that at most
  * `count`+1 ticks land inside the domain, aligned to round numbers.
  */

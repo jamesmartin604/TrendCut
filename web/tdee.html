@@ -53,7 +53,11 @@
           <span class="tdee-current-value"><span id="current-value">–</span><span class="unit-mono"> kcal</span></span>
         </div>
       </div>
-      <div class="chart-area chart-area-tall" id="tdee-chart"></div>
+      <div class="chart-wrap">
+        <div class="chart-area chart-area-tall" id="tdee-chart"></div>
+        <div class="chart-cursor" id="tdee-chart-cursor" hidden></div>
+        <div class="chart-tooltip" id="tdee-chart-tooltip" role="status" hidden></div>
+      </div>
       <p class="chart-legend">
         <span class="legend-item"><span class="legend-swatch legend-line"></span>rolling TDEE</span>
         <span class="legend-item"><span class="legend-swatch legend-band"></span>95% CI (wider = less certain)</span>

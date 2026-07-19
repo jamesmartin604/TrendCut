@@ -68,14 +68,14 @@ export function renderTdeeChart(container, { points }) {
   if (xRange === null) {
     container.innerHTML =
       '<div class="chart-empty">Not enough data yet to chart TDEE over time — keep logging and the estimate history will build up here.</div>';
-    return;
+    return null;
   }
   const [iFirst, iLast] = xRange;
   const runs = estimateRuns(points);
 
   const width = container.clientWidth;
   const height = container.clientHeight;
-  if (width === 0 || height === 0) return;
+  if (width === 0 || height === 0) return null;
 
   const x0 = MARGIN.left;
   const x1 = width - MARGIN.right;
@@ -159,4 +159,25 @@ export function renderTdeeChart(container, { points }) {
   }
 
   container.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="TDEE over time chart">${parts.join("")}</svg>`;
+
+  // Geometry for hit-testing (tooltip), mirroring the weight chart. Positions are in
+  // viewBox space (== container pixel space). x0/x1 are the pixel columns of index 0
+  // and the last index — derived from the scale so `nearestIndex` inverts a cursor x
+  // back to a data index correctly even though the domain is framed to [iFirst,iLast]
+  // (leading warm-up points map off the left edge; their yPos is null so no tooltip).
+  return {
+    width,
+    height,
+    x0: xScale(0),
+    x1: xScale(Math.max(points.length - 1, 0)),
+    y0,
+    y1,
+    points: points.map((p, i) => ({
+      i,
+      date: p.date,
+      tdee: p.tdee,
+      xPos: xScale(i),
+      yPos: p.tdee == null ? null : yScale(p.tdee),
+    })),
+  };
 }

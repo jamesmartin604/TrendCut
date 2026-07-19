@@ -9,14 +9,27 @@
  * screen says so plainly instead of showing fabricated numbers.
  */
 
+import { nearestDefinedIndex, nearestIndex } from "./chart-math.js";
 import { getTdeeHistory } from "./api.js";
 import { renderTdeeChart } from "./tdee-chart.js";
 
 const $ = (id) => document.getElementById(id);
 
-const state = { history: null };
+const state = {
+  history: null,
+  chartGeometry: null, // hit-test geometry from the last chart render (tooltip)
+};
 
 const fmtInt = (v) => Math.round(v).toLocaleString("en-US");
+
+// Same short human date as the weight-chart tooltip (e.g. "Jul 16"), UTC so the
+// calendar day never shifts with the viewer's timezone.
+const fmtDateHuman = (iso) =>
+  new Date(`${iso}T00:00:00Z`).toLocaleString("en", {
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  });
 
 function confidentPoints() {
   return state.history.points.filter((p) => p.tdee != null);
@@ -67,7 +80,79 @@ function renderSummary() {
 }
 
 function renderChart() {
-  renderTdeeChart($("tdee-chart"), { points: state.history.points });
+  state.chartGeometry = renderTdeeChart($("tdee-chart"), { points: state.history.points });
+  hideTooltip(); // a re-render (resize) invalidates any open tooltip
+}
+
+// ---------- chart tooltip (hover / tap) ---------- //
+// Mirrors the weight chart's tooltip (app.js): map the cursor back to the nearest
+// plotted point via the shared `nearestIndex`, skip gaps with `nearestDefinedIndex`,
+// and show date + TDEE value only. Same show/hide/positioning + tap-to-dismiss.
+
+function hideTooltip() {
+  $("tdee-chart-tooltip").hidden = true;
+  $("tdee-chart-cursor").hidden = true;
+}
+
+function updateTooltip(clientX) {
+  const geom = state.chartGeometry;
+  const el = $("tdee-chart");
+  if (!geom) return hideTooltip();
+  const rect = el.getBoundingClientRect();
+  if (rect.width === 0) return hideTooltip();
+
+  // Cursor → viewBox space (== chart pixel space at render time).
+  const vbX = (clientX - rect.left) * (geom.width / rect.width);
+  let idx = nearestIndex(vbX, geom.x0, geom.x1, geom.points.length);
+  if (idx < 0) return hideTooltip();
+  // Snap off gaps (insufficient_data days carry no estimate) to the nearest point
+  // that actually has a TDEE to show.
+  if (geom.points[idx].tdee == null) {
+    idx = nearestDefinedIndex(
+      geom.points.map((p) => p.tdee),
+      idx,
+    );
+    if (idx < 0) return hideTooltip();
+  }
+  const p = geom.points[idx];
+
+  // Only show when the cursor is genuinely near the point's column.
+  if (Math.abs(p.xPos - vbX) > 30) return hideTooltip();
+
+  const tip = $("tdee-chart-tooltip");
+  tip.innerHTML =
+    `<div class="tt-date">${fmtDateHuman(p.date)}</div>` +
+    `<div class="tt-row"><span class="tt-k">TDEE</span><span class="tt-v">${fmtInt(p.tdee)} kcal</span></div>`;
+  tip.hidden = false;
+
+  const cursor = $("tdee-chart-cursor");
+  cursor.style.left = `${p.xPos}px`;
+  cursor.style.top = `${p.yPos}px`;
+  cursor.hidden = false;
+
+  // Center above the point; flip below near the top edge; clamp within the chart.
+  const tw = tip.offsetWidth;
+  const th = tip.offsetHeight;
+  let left = p.xPos - tw / 2;
+  left = Math.max(4, Math.min(left, geom.width - tw - 4));
+  let top = p.yPos - th - 12;
+  if (top < 4) top = p.yPos + 14;
+  tip.style.left = `${left}px`;
+  tip.style.top = `${top}px`;
+}
+
+function wireTooltip() {
+  const el = $("tdee-chart");
+  const move = (e) => updateTooltip(e.clientX);
+  el.addEventListener("pointermove", move);
+  el.addEventListener("pointerdown", move); // touch tap / mouse click
+  el.addEventListener("pointerleave", (e) => {
+    if (e.pointerType === "mouse") hideTooltip();
+  });
+  // Tapping/clicking outside the chart dismisses the tooltip (touch).
+  document.addEventListener("pointerdown", (e) => {
+    if (!el.contains(e.target)) hideTooltip();
+  });
 }
 
 async function init() {
@@ -80,6 +165,7 @@ async function init() {
       renderChart();
     }
   }).observe(chartEl);
+  wireTooltip();
 
   try {
     state.history = await getTdeeHistory();

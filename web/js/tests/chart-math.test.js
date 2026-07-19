@@ -16,6 +16,7 @@ import {
   indexDomain,
   linePath,
   linearScale,
+  nearestDefinedIndex,
   nearestIndex,
   padDomain,
   round1,
@@ -73,6 +74,34 @@ test("[adversarial] nearestIndex on an empty series returns -1", () => {
 test("[adversarial] nearestIndex with a single point always returns 0", () => {
   assert.equal(nearestIndex(0, 0, 400, 1), 0);
   assert.equal(nearestIndex(400, 0, 400, 1), 0);
+});
+
+// nearestDefinedIndex: skip gaps to the nearest point that carries a value (how the
+// TDEE tooltip lands on a real estimate instead of an insufficient_data day).
+test("nearestDefinedIndex returns idx itself when that point is defined", () => {
+  assert.equal(nearestDefinedIndex([2400, 2450, 2500], 1), 1);
+});
+
+test("nearestDefinedIndex snaps out of a gap to the nearest defined point", () => {
+  // Gap at index 2; nearest defined is index 1 (distance 1) vs index 4 (distance 2).
+  assert.equal(nearestDefinedIndex([2400, 2450, null, null, 2500], 2), 1);
+  // From index 3 the nearer defined point is index 4.
+  assert.equal(nearestDefinedIndex([2400, 2450, null, null, 2500], 3), 4);
+});
+
+test("nearestDefinedIndex resolves an equidistant tie to the earlier index", () => {
+  // idx 1 is null; idx 0 and idx 2 are both distance 1 → earlier (0) wins.
+  assert.equal(nearestDefinedIndex([2400, null, 2500], 1), 0);
+});
+
+test("nearestDefinedIndex handles leading/trailing gaps and NaN", () => {
+  assert.equal(nearestDefinedIndex([null, null, 2500, null], 0), 2); // leading gap
+  assert.equal(nearestDefinedIndex([2400, null, NaN], 2), 0); // NaN treated as missing
+});
+
+test("[adversarial] nearestDefinedIndex on an all-missing series returns -1", () => {
+  assert.equal(nearestDefinedIndex([null, null, NaN], 1), -1);
+  assert.equal(nearestDefinedIndex([], 0), -1);
 });
 
 test("linearScale with a degenerate domain parks values mid-range (no divide-by-zero)", () => {
