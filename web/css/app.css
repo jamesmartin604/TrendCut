@@ -561,17 +561,48 @@ body {
 
 /* Fluctuation-note emphasis. The tier is set by how large today's raw-vs-trend gap
    is relative to the user's OWN recent noise (see status.js `deviationTier`), so
-   these two rules escalate a note that is already showing — they never introduce one.
-   Colour and weight only: same 12px/16px as any other metric note, no badge, no new
-   component. Deliberately NOT --status-warning/--status-error: the copy says "this is
-   water, not a stall", and an alert colour would contradict the words next to it. */
+   these rules escalate a note that is already showing — they never introduce one.
+
+   The emphasised tiers become a soft tinted panel, reusing the `.pace-chip` idiom
+   (12px padding, --radius-xl, same 12px/16px type) rather than introducing a new
+   component. The tint is blue because DESIGN.md reserves blue for the trend line and
+   "primary data signals", and --data-fill exists for statistical range — which is
+   exactly what this note is about. Deliberately NOT --status-warning/--status-error:
+   the copy says "this is water, not a stall", and an alert colour would contradict
+   the words inside it.
+
+   Only the lead sentence is bold (see `.metric-note strong` below): a whole
+   paragraph at 600 reads as shouting and undercuts reassuring copy, so the weight
+   lands on the fact and the reassurance stays calm underneath. */
+.metric-note.is-notable,
+.metric-note.is-large {
+  margin-top: 10px;
+  padding: 12px;
+  border-radius: var(--radius-xl);
+  font-weight: 400;
+}
+
 .metric-note.is-notable {
+  background: var(--data-fill);
   color: var(--on-surface-variant);
-  font-weight: 500;
 }
 
 .metric-note.is-large {
-  color: var(--on-surface);
+  /* A deeper blue than --primary: --primary is tuned for contrast on white, and
+     this text sits on the tint above. */
+  background: rgba(59, 130, 246, 0.14);
+  color: #14386e;
+}
+
+/* The note's lead sentence always ships in a <strong>, but it is only emphasised on
+   an emphasised tier — on the normal tier it must render exactly like the rest of the
+   sentence, so neutralise the UA's bold by default. */
+.metric-note strong {
+  font-weight: inherit;
+}
+
+.metric-note.is-notable strong,
+.metric-note.is-large strong {
   font-weight: 600;
 }
 

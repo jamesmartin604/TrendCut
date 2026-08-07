@@ -33,6 +33,15 @@ function residualsWithDispersion(sd, n = MIN_RESIDUALS_FOR_DISPERSION) {
   return Array.from({ length: n }, (_, i) => (i % 2 === 0 ? -d : d));
 }
 
+/**
+ * The note as the reader sees it: lead + rest joined exactly as the DOM joins them.
+ * The copy is split so only the lead can be emphasised, but assertions about wording
+ * and honesty apply to the whole sentence, not to whichever half it landed in.
+ */
+function fullText(note) {
+  return `${note.lead} ${note.rest}`;
+}
+
 test("plateauLabel maps every known grade to its label + class", () => {
   assert.deepEqual(plateauLabel("on_track"), { label: "On track", cls: "is-ontrack" });
   assert.deepEqual(plateauLabel("slowing"), { label: "Slowing", cls: "is-slowing" });
@@ -83,28 +92,31 @@ test("fluctuationNote is null at or below the threshold (ordinary days stay clea
 test("fluctuationNote above trend: direction + gap in display units, no cause", () => {
   const note = fluctuationNote(80.8, 80.0, "kg");
   assert.equal(note.tier, "normal");
-  assert.match(note.text, /0\.8 kg above your trend/);
-  assert.match(note.text, /not a change in fat loss/);
-  assert.match(note.text, /trend is what matters/i);
+  assert.match(fullText(note), /0\.8 kg above your trend/);
+  assert.match(fullText(note), /not a change in fat loss/);
+  assert.match(fullText(note), /trend is what matters/i);
 });
 
 test("fluctuationNote below trend: direction-aware wording", () => {
   const note = fluctuationNote(79.2, 80.0, "kg");
-  assert.match(note.text, /0\.8 kg below your trend/);
-  assert.match(note.text, /likely normal day-to-day fluctuation/);
+  assert.match(fullText(note), /0\.8 kg below your trend/);
+  assert.match(fullText(note), /likely normal day-to-day fluctuation/);
 });
 
 test("fluctuationNote respects lb display units (gap converted, gate stays in kg)", () => {
   // 0.8 kg gap ≈ 1.8 lb; the threshold comparison happened in kg.
   const note = fluctuationNote(80.8, 80.0, "lb");
-  assert.match(note.text, /1\.8 lb above your trend/);
+  assert.match(fullText(note), /1\.8 lb above your trend/);
 });
 
 test("[honest] the normal-tier note never asserts a cause for the swing", () => {
   for (const note of [fluctuationNote(81.0, 80.0, "kg"), fluctuationNote(79.0, 80.0, "kg")]) {
     assert.equal(note.tier, "normal");
     for (const causal of ["water", "carb", "sodium", "because", "glycogen", "ate"]) {
-      assert.ok(!note.text.toLowerCase().includes(causal), `note must not claim "${causal}"`);
+      assert.ok(
+        !fullText(note).toLowerCase().includes(causal),
+        `note must not claim "${causal}"`,
+      );
     }
   }
 });
@@ -218,18 +230,44 @@ test("fluctuationNote escalates wording with the tier, both signs", () => {
   const at = (mult) => fluctuationNote(80.0 + sd * mult, 80.0, "kg", rs);
 
   assert.equal(at(2.5).tier, "notable");
-  assert.match(at(2.5).text, /well above your recent day-to-day range/);
-  assert.match(at(2.5).text, /trend is what matters/i);
+  assert.match(fullText(at(2.5)), /well above your recent day-to-day range/);
+  assert.match(fullText(at(2.5)), /trend is what matters/i);
 
   assert.equal(at(9).tier, "large");
-  assert.match(at(9).text, /unusually big single-day move/);
-  assert.match(at(9).text, /the trend is the signal/);
+  assert.match(fullText(at(9)), /unusually big single-day move/);
+  assert.match(fullText(at(9)), /the trend is the signal/);
 
   // Below-trend readings reach the same tiers with mirrored wording.
   assert.equal(at(-2.5).tier, "notable");
-  assert.match(at(-2.5).text, /well below your recent day-to-day range/);
+  assert.match(fullText(at(-2.5)), /well below your recent day-to-day range/);
   assert.equal(at(-9).tier, "large");
-  assert.match(at(-9).text, /unusually big single-day move/);
+  assert.match(fullText(at(-9)), /unusually big single-day move/);
+});
+
+test("the lead carries the fact and the rest carries the reassurance", () => {
+  // Dispersion 0.4 so that even the normal-tier case (1.5σ = 0.6 kg) still clears the
+  // 0.5 kg floor gate and produces a note to inspect.
+  const sd = 0.4;
+  const rs = residualsWithDispersion(sd);
+  const at = (mult) => fluctuationNote(80.0 + sd * mult, 80.0, "kg", rs);
+  assert.equal(at(1.5).tier, "normal"); // guard: the loop below must cover all 3 tiers
+
+  for (const note of [at(1.5), at(2.5), at(9)]) {
+    // Every tier splits, so the DOM shape never changes — only the styling does.
+    assert.ok(note.lead.length > 0 && note.rest.length > 0);
+    // The lead is a complete sentence: the two halves join with one space and read
+    // correctly even where nothing is emphasised.
+    assert.match(note.lead, /\.$/);
+    assert.match(note.rest, /^[A-Z]/);
+    // The measured fact is in the emphasised half…
+    assert.match(note.lead, /above your trend/);
+    // …and the trend reassurance is never left stranded in the bold part alone.
+    assert.match(note.rest, /trend/i);
+  }
+
+  // Only the emphasised tiers move the cause explanation out of the lead.
+  assert.match(at(9).rest, /water rather than fat/);
+  assert.ok(!/water/.test(at(9).lead), "the large tier's lead states the move, not the cause");
 });
 
 test("[honest] emphasised tiers describe physiology, never THIS reading's cause", () => {
@@ -245,13 +283,13 @@ test("[honest] emphasised tiers describe physiology, never THIS reading's cause"
     // Never an assertion about what the user did — the app logs calories, not macros.
     for (const claim of ["you ate", "you had", "because you", "your sodium", "your carbs"]) {
       assert.ok(
-        !note.text.toLowerCase().includes(claim),
-        `note must not claim "${claim}": ${note.text}`,
+        !fullText(note).toLowerCase().includes(claim),
+        `note must not claim "${claim}": ${fullText(note)}`,
       );
     }
     // Always reframes toward the trend rather than a stall.
-    assert.match(note.text, /trend/i);
-    assert.ok(!/stall|plateau|gained fat|losing fat has stopped/i.test(note.text));
+    assert.match(fullText(note), /trend/i);
+    assert.ok(!/stall|plateau|gained fat|losing fat has stopped/i.test(fullText(note)));
   }
 });
 
@@ -259,7 +297,7 @@ test("[anti-drift] no tier copy hardcodes a kg value beyond the formatted gap", 
   const sd = 0.3;
   const rs = residualsWithDispersion(sd);
   for (const mult of [2.5, 9]) {
-    const { text } = fluctuationNote(80.0 + sd * mult, 80.0, "kg", rs);
+    const text = fullText(fluctuationNote(80.0 + sd * mult, 80.0, "kg", rs));
     // The only number in the copy is the computed gap itself.
     const numbers = text.match(/\d+(\.\d+)?/g) ?? [];
     assert.deepEqual(numbers, [(sd * mult).toFixed(1)], `unexpected literals in: ${text}`);

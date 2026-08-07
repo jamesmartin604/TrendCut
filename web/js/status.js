@@ -125,8 +125,15 @@ export function deviationTier(residualKg, residualsKg) {
 }
 
 /**
- * Tier + direction → the note's wording. Kept beside the tier constants so copy and
- * thresholds stay in step; the tiers escalate EMPHASIS and specificity, never alarm.
+ * Tier + direction → the note's wording, split into `{lead, rest}`. Kept beside the
+ * tier constants so copy and thresholds stay in step; the tiers escalate EMPHASIS and
+ * specificity, never alarm.
+ *
+ * The split is what lets an emphasised note carry its weight on the FACT (the lead)
+ * while the reassurance stays at normal weight — a whole paragraph in bold reads as
+ * shouting, which would undercut copy whose entire message is "this is ordinary".
+ * The lead is always a complete sentence, so the two halves join with a single space
+ * and read correctly even where the styling is absent (the normal tier bolds nothing).
  *
  * On cause attribution: the "normal" and "notable" tiers name no cause at all, and
  * the "large" tier states only general physiology ("swings this size are usually
@@ -134,29 +141,37 @@ export function deviationTier(residualKg, residualsKg) {
  * total, not macros, so it cannot know that; saying "you ate salty food" would be
  * fabrication. Describing what a move of this size usually is, is not.
  */
-function noteText(tier, gap, above) {
+function noteParts(tier, gap, above) {
   const dir = above ? "above" : "below";
   if (tier === "large") {
-    return (
-      `Today's reading is ${gap} ${dir} your trend — an unusually big single-day ` +
-      `move for you. Swings this size are almost always water rather than fat: ` +
-      `sodium, carbs, and hydration can shift the scale overnight. One reading ` +
-      `barely moves your trend line, and the trend is the signal.`
-    );
+    return {
+      lead:
+        `Today's reading is ${gap} ${dir} your trend — an unusually big ` +
+        `single-day move for you.`,
+      rest:
+        `Swings this size are almost always water rather than fat: sodium, carbs, ` +
+        `and hydration can shift the scale overnight. One reading barely moves ` +
+        `your trend line, and the trend is the signal.`,
+    };
   }
   if (tier === "notable") {
     const tail = above ? ", not a change in fat loss" : "";
-    return (
-      `Today's reading is ${gap} ${dir} your trend — well ${dir} your recent ` +
-      `day-to-day range, but still consistent with normal water and glycogen ` +
-      `swings${tail}. Your trend is what matters.`
-    );
+    return {
+      lead:
+        `Today's reading is ${gap} ${dir} your trend — well ${dir} your recent ` +
+        `day-to-day range.`,
+      rest:
+        `Still consistent with normal water and glycogen swings${tail}. ` +
+        `Your trend is what matters.`,
+    };
   }
   const tail = above ? ", not a change in fat loss" : "";
-  return (
-    `Today's reading is ${gap} ${dir} your trend — likely normal day-to-day ` +
-    `fluctuation${tail}. Your trend is what matters.`
-  );
+  return {
+    lead:
+      `Today's reading is ${gap} ${dir} your trend — likely normal day-to-day ` +
+      `fluctuation${tail}.`,
+    rest: "Your trend is what matters.",
+  };
 }
 
 /**
@@ -164,7 +179,7 @@ function noteText(tier, gap, above) {
  *
  * Honest by construction: it states only what the data supports — the reading sits
  * above/below the smoothed trend, how that compares to the user's own recent noise,
- * and that short-term swings are expected. See `noteText` for the cause-attribution
+ * and that short-term swings are expected. See `noteParts` for the cause-attribution
  * rule the copy obeys.
  *
  * Two independent gates:
@@ -172,15 +187,16 @@ function noteText(tier, gap, above) {
  *  2. `deviationTier` — a relative, per-user measure deciding how emphatic it is.
  *
  * Returns `null` when either value is missing (no trend yet / no weigh-in) or the
- * absolute gap does not exceed `thresholdKg`; otherwise `{tier, text}`, where the
- * caller maps `tier` to the note's visual emphasis.
+ * absolute gap does not exceed `thresholdKg`; otherwise `{tier, lead, rest}`, where
+ * the caller maps `tier` to the note's visual emphasis and renders `lead` in its own
+ * element so only that half can be emphasised.
  *
  * @param {number|null} rawKg latest raw weigh-in, kg
  * @param {number|null} trendKg smoothed trend for the same day, kg
  * @param {"kg"|"lb"} units display unit for the gap value
  * @param {Array<number>} residualsKg raw − trend over the visible window, kg
  * @param {number} thresholdKg floor gate, in kg
- * @returns {{tier: "normal"|"notable"|"large", text: string}|null}
+ * @returns {{tier: "normal"|"notable"|"large", lead: string, rest: string}|null}
  */
 export function fluctuationNote(
   rawKg,
@@ -194,7 +210,7 @@ export function fluctuationNote(
   if (Math.abs(gapKg) <= thresholdKg) return null;
   const gap = `${Math.abs(fromKg(gapKg, units)).toFixed(1)} ${unitLabel(units)}`;
   const tier = deviationTier(gapKg, residualsKg);
-  return { tier, text: noteText(tier, gap, gapKg > 0) };
+  return { tier, ...noteParts(tier, gap, gapKg > 0) };
 }
 
 export function tdeeHeroView(tdee) {

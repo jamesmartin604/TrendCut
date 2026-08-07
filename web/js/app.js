@@ -357,7 +357,13 @@ function renderRawWeightCard() {
     // framed as noise rather than a stall. Pure helper decides tier and wording.
     const note = fluctuationNote(latest.weight_kg, latest.trend_kg, u, visibleResiduals());
     if (note != null) {
-      contextEl.textContent = note.text;
+      // The lead goes in its own <strong> so the emphasis can land on the fact while
+      // the reassurance stays at normal weight (the CSS only bolds it on an
+      // emphasised tier). Built as nodes, not innerHTML — the copy is app-authored,
+      // but it interpolates a formatted number, so it never becomes markup.
+      const lead = document.createElement("strong");
+      lead.textContent = note.lead;
+      contextEl.replaceChildren(lead, document.createTextNode(` ${note.rest}`));
       if (note.tier !== "normal") contextEl.classList.add(`is-${note.tier}`);
       contextEl.hidden = false;
     }
