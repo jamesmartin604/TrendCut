@@ -559,6 +559,22 @@ body {
   color: var(--text-muted);
 }
 
+/* Fluctuation-note emphasis. The tier is set by how large today's raw-vs-trend gap
+   is relative to the user's OWN recent noise (see status.js `deviationTier`), so
+   these two rules escalate a note that is already showing — they never introduce one.
+   Colour and weight only: same 12px/16px as any other metric note, no badge, no new
+   component. Deliberately NOT --status-warning/--status-error: the copy says "this is
+   water, not a stall", and an alert colour would contradict the words next to it. */
+.metric-note.is-notable {
+  color: var(--on-surface-variant);
+  font-weight: 500;
+}
+
+.metric-note.is-large {
+  color: var(--on-surface);
+  font-weight: 600;
+}
+
 /* ---------- Buttons ---------- */
 .btn {
   font-family: var(--font-sans);

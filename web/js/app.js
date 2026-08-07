@@ -291,6 +291,20 @@ function renderMetrics() {
 
 // ---------- latest raw weigh-in card ---------- //
 
+/**
+ * Raw-vs-trend residuals (kg) over the window the chart is currently showing —
+ * the same slice the user can see, so "your recent range" means the range in front
+ * of them. Days without a weigh-in (calorie-only) contribute no residual.
+ *
+ * Derived entirely from data already on the dashboard: the raw points and the EWMA
+ * trend the chart already plots. No estimator change, no extra API field.
+ */
+function visibleResiduals() {
+  return chartPoints()
+    .filter((p) => p.weight_kg != null && p.trend_kg != null)
+    .map((p) => p.weight_kg - p.trend_kg);
+}
+
 function renderRawWeightCard() {
   const u = units();
   const trend = state.estimate.trend;
@@ -299,6 +313,7 @@ function renderRawWeightCard() {
   const noteEl = $("raw-note");
   const contextEl = $("raw-context");
   contextEl.hidden = true; // shown only when a fluctuation note is warranted
+  contextEl.className = "metric-note"; // drop any tier emphasis from a previous render
 
   // "Current" means the most recent logged day. If that day has no weigh-in
   // (calorie-only) or there's no data at all, show an honest empty state rather
@@ -335,11 +350,15 @@ function renderRawWeightCard() {
       noteEl.textContent =
         `${dateStr} · trend ${trendDisp} ${ul} · ${sign}${Math.abs(diff).toFixed(1)} ${dir} trend`;
     }
-    // Reassurance note for a notable (threshold-gated) raw-vs-trend gap. Pure
-    // helper decides; it never asserts a cause — only that swings are expected.
-    const note = fluctuationNote(latest.weight_kg, latest.trend_kg, u);
+    // Reassurance note for a notable (threshold-gated) raw-vs-trend gap. Its
+    // emphasis scales with how large today's gap is relative to the user's OWN
+    // recent noise, measured over the visible chart window (`visibleResiduals`) —
+    // so a routine swing stays muted and an unusual one is flagged, both still
+    // framed as noise rather than a stall. Pure helper decides tier and wording.
+    const note = fluctuationNote(latest.weight_kg, latest.trend_kg, u, visibleResiduals());
     if (note != null) {
-      contextEl.textContent = note;
+      contextEl.textContent = note.text;
+      if (note.tier !== "normal") contextEl.classList.add(`is-${note.tier}`);
       contextEl.hidden = false;
     }
   } else {
@@ -511,6 +530,10 @@ function wireRangeButtons() {
         b.classList.toggle("is-active", b === btn);
       }
       renderChart();
+      // The weigh-in card's fluctuation note is classified against the VISIBLE
+      // window's noise, so a range switch changes what counts as unusual — re-render
+      // it too, or the note keeps a tier computed from the previous range.
+      renderRawWeightCard();
     });
   }
 }
