@@ -28,6 +28,13 @@ jobs:
       - name: Test (pytest)
         run: pytest
 
+      # Print the estimator's measured CI calibration into the build log every run.
+      # The assertions live in tests/test_ci_coverage.py; this step only makes the
+      # number visible, since pytest hides stdout for passing tests. It is a known,
+      # documented gap (PRD §7.3) — surfaced rather than buried.
+      - name: TDEE confidence-interval calibration (report only)
+        run: python -m tests.test_ci_coverage
+
       # Frontend pure-logic tests via Node's BUILT-IN test runner — no npm install,
       # no framework, no build step (web/package.json is just a `type: module`
       # marker so Node can import the existing ES-module files).
