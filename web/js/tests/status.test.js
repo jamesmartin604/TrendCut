@@ -9,11 +9,15 @@ import { test } from "node:test";
 
 import {
   FLUCTUATION_NOTE_THRESHOLD_KG,
+  INSTABILITY_RANGE_KCAL,
   LARGE_SIGMA,
   MAD_TO_SD,
   MIN_RESIDUALS_FOR_DISPERSION,
+  MIN_STABILITY_POINTS,
   NOTABLE_SIGMA,
+  STABILITY_LOOKBACK_DAYS,
   deviationTier,
+  estimateStability,
   fluctuationNote,
   plateauLabel,
   robustDispersion,
@@ -323,4 +327,142 @@ test("[adversarial / honest] insufficient_data fabricates NO number", () => {
   assert.equal(v.tdee, null);
   assert.equal(v.ciLow, null);
   assert.equal(v.ciHigh, null);
+});
+
+// ---------- estimate stability gate ---------- //
+
+/** `/tdee-history`-shaped points from a list of TDEE values, with a given CI half-width. */
+function historyPoints(values, halfWidth = 30) {
+  return values.map((tdee, i) => ({
+    date: `2026-07-${String(21 + i).padStart(2, "0")}`,
+    status: "ok",
+    tdee,
+    ci_low: tdee == null ? null : tdee - halfWidth,
+    ci_high: tdee == null ? null : tdee + halfWidth,
+  }));
+}
+
+/** The real Jul 21-31 replay (window_days=28) that motivated this gate: range 117. */
+const JUL_21_31 = [2371, 2376, 2386, 2412, 2429, 2432, 2434, 2444, 2457, 2472, 2493];
+
+test("estimateStability: a quiet series is stable", () => {
+  // The real Jul 22 lookback — the estimate barely moved.
+  const s = estimateStability(historyPoints([2383, 2380, 2379, 2376, 2378, 2381, 2377]));
+  assert.equal(s.stable, true);
+  assert.equal(s.reason, "settled");
+  assert.ok(s.range < INSTABILITY_RANGE_KCAL);
+});
+
+test("estimateStability: the real Jul 21-31 climb gates", () => {
+  const s = estimateStability(historyPoints(JUL_21_31));
+  assert.equal(s.stable, false);
+  assert.equal(s.reason, "moving");
+  // The lookback is the last 10 of the 11 days, so Jul 21's 2371 falls outside it —
+  // giving the 117 kcal range the diagnostic measured for the as-of-Jul-31 window.
+  assert.equal(s.lo, 2376);
+  assert.equal(s.hi, 2493);
+  assert.equal(s.range, 117);
+  assert.equal(s.n, 10);
+});
+
+test("estimateStability: only the last STABILITY_LOOKBACK_DAYS count", () => {
+  // A huge old swing followed by a settled recent stretch must NOT gate.
+  const s = estimateStability(historyPoints([1800, 2900, 1900, ...new Array(10).fill(2400)]));
+  assert.equal(s.n, STABILITY_LOOKBACK_DAYS);
+  assert.equal(s.stable, true);
+});
+
+test("[sparse] estimateStability does not judge thin history", () => {
+  // Deliberately WILD values (range 200, twice the threshold) with too few points:
+  // the only thing preventing a gate here is the sparse guard, so this proves the
+  // guard rather than passing because the series happened to be quiet.
+  const wild = [2300, 2500, 2350, 2480, 2400];
+  assert.equal(wild.length, MIN_STABILITY_POINTS - 1);
+  assert.ok(Math.max(...wild) - Math.min(...wild) > INSTABILITY_RANGE_KCAL);
+
+  const thin = estimateStability(historyPoints(wild));
+  assert.equal(thin.stable, true, "must not gate when it cannot judge");
+  assert.equal(thin.reason, "insufficient_history");
+  assert.equal(thin.range, null);
+  assert.equal(thin.ratioToCi, null);
+
+  // One more point and the same wildness DOES gate — the guard is the only difference.
+  const atMin = estimateStability(historyPoints([...wild, 2400]));
+  assert.equal(atMin.n, MIN_STABILITY_POINTS);
+  assert.equal(atMin.stable, false);
+  assert.equal(atMin.reason, "moving");
+});
+
+test("[sparse] insufficient_data days carry no estimate and don't count", () => {
+  const pts = historyPoints([null, null, null, null, 2400, 2410, 2405]);
+  const s = estimateStability(pts);
+  assert.equal(s.n, 3);
+  assert.equal(s.stable, true);
+  assert.equal(s.reason, "insufficient_history");
+  assert.equal(estimateStability(historyPoints([])).stable, true);
+  assert.equal(estimateStability(null).stable, true);
+});
+
+test("estimateStability boundary sits on INSTABILITY_RANGE_KCAL, inclusive", () => {
+  const base = 2400;
+  const exact = historyPoints([...new Array(9).fill(base), base + INSTABILITY_RANGE_KCAL]);
+  assert.equal(estimateStability(exact).stable, true, "exactly at the threshold is stable");
+  const over = historyPoints([...new Array(9).fill(base), base + INSTABILITY_RANGE_KCAL + 1]);
+  assert.equal(estimateStability(over).stable, false);
+});
+
+test("[anti-drift] ratioToCi is reported but never gates", () => {
+  // A tiny reported CI makes the ratio enormous, but the movement is sub-threshold —
+  // this MUST stay stable. Gating on the ratio is what the coverage test disproved:
+  // the CI is too narrow essentially always, so a ratio gate would be permanently on
+  // and would bite the cleanest loggers hardest.
+  const s = estimateStability(historyPoints([2400, 2410, 2420, 2430, 2440, 2450, 2445], 1));
+  assert.ok(s.ratioToCi > 20, `ratio should be large, got ${s.ratioToCi}`);
+  assert.equal(s.stable, true);
+  assert.ok(s.range <= INSTABILITY_RANGE_KCAL);
+});
+
+test("estimateStability is sign-agnostic: a falling estimate gates too", () => {
+  const s = estimateStability(historyPoints([...JUL_21_31].reverse()));
+  assert.equal(s.stable, false);
+  assert.equal(s.range, 101); // last 10 of the reversed series: 2472 down to 2371
+});
+
+test("tdeeHeroView: unstable routes to the same prominent line as low confidence", () => {
+  const unstable = { stable: false, lo: 2371, hi: 2493, range: 122, n: 10, ratioToCi: 4 };
+  const v = tdeeHeroView({ status: "ok", tdee: 2493, ci_low: 2459, ci_high: 2527 }, unstable);
+  assert.equal(v.unstable, true);
+  assert.equal(v.ciProminent, true); // same treatment, not a parallel one
+  assert.equal(v.rangeLo, 2371);
+  assert.equal(v.rangeHi, 2493);
+  assert.equal(v.rangeDays, 10);
+  assert.equal(v.showNumber, true); // the point estimate is still shown
+});
+
+test("tdeeHeroView: the gate defers to the estimator's own low_confidence", () => {
+  // Already flagged → presentation is left exactly as it was, no doubled warning.
+  const unstable = { stable: false, lo: 2371, hi: 2493, range: 122, n: 10, ratioToCi: 4 };
+  const v = tdeeHeroView(
+    { status: "low_confidence", tdee: 2493, ci_low: 1900, ci_high: 3100 },
+    unstable,
+  );
+  assert.equal(v.lowConfidence, true);
+  assert.equal(v.unstable, false);
+  assert.equal(v.rangeLo, null);
+});
+
+test("tdeeHeroView without stability is unchanged (back-compatible)", () => {
+  const v = tdeeHeroView({ status: "ok", tdee: 2400, ci_low: 2360, ci_high: 2440 });
+  assert.equal(v.unstable, false);
+  assert.equal(v.ciProminent, false);
+  assert.equal(v.rangeLo, null);
+});
+
+test("[sparse] a thin history never softens the hero", () => {
+  // Same wildly-swinging-but-thin history as above: the hero must stay confident.
+  const s = estimateStability(historyPoints([2300, 2500, 2350]));
+  const v = tdeeHeroView({ status: "ok", tdee: 2400, ci_low: 2360, ci_high: 2440 }, s);
+  assert.equal(v.unstable, false);
+  assert.equal(v.ciProminent, false);
+  assert.equal(v.rangeLo, null);
 });

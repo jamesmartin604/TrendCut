@@ -8,7 +8,13 @@
  * flagged with its wide CI made prominent. No fallback TDEE is ever invented here.
  */
 
-import { getEstimate, getRequirements, getSettings, importEntries } from "./api.js";
+import {
+  getEstimate,
+  getRequirements,
+  getSettings,
+  getTdeeHistory,
+  importEntries,
+} from "./api.js";
 import { goalLineAnchors, nearestIndex } from "./chart-math.js";
 import { renderWeightChart } from "./chart.js";
 import { openEntryForm } from "./entry-form.js";
@@ -20,7 +26,7 @@ import {
   onboardingProgressText,
   onboardingState,
 } from "./onboarding.js";
-import { fluctuationNote, plateauLabel, tdeeHeroView } from "./status.js";
+import { estimateStability, fluctuationNote, plateauLabel, tdeeHeroView } from "./status.js";
 import { formatWeight, fromKg, unitLabel } from "./units.js";
 
 const $ = (id) => document.getElementById(id);
@@ -48,6 +54,7 @@ const state = {
   estimate: null,
   settings: null,
   requirements: null, // estimator's minimum-data bar (for onboarding copy)
+  tdeeHistory: null, // rolling as-of-each-day estimates; drives the stability gate
   range: "30", // chart range in days, or "all"
   chartGeometry: null, // hit-test geometry from the last chart render (tooltip)
   goalLine: readGoalPref(), // show the plan/goal line on the weight chart
@@ -84,7 +91,13 @@ function renderHero() {
   const ciEl = $("tdee-ci");
   const unitEl = $("tdee-unit");
   const lowConf = $("low-conf-chip");
-  const view = tdeeHeroView(tdee);
+  const noteEl = $("tdee-stability-note");
+  const stability = estimateStability(state.tdeeHistory?.points ?? []);
+  const view = tdeeHeroView(tdee, stability);
+
+  noteEl.hidden = true;
+  lowConf.className = "chip chip-warning";
+  lowConf.textContent = "Low confidence";
 
   if (view.insufficient) {
     valueEl.textContent = "Not enough data yet";
@@ -102,13 +115,34 @@ function renderHero() {
   valueEl.textContent = fmtInt(view.tdee);
   valueEl.classList.remove("is-muted");
   unitEl.hidden = !view.showUnit;
-  ciEl.textContent = `${fmtInt(view.ciLow)}–${fmtInt(view.ciHigh)} kcal · 95% CI`;
 
-  lowConf.hidden = !view.lowConfidence;
-  // Low confidence: the wide CI is the story — make it the prominent line.
+  if (view.unstable) {
+    // The estimate has moved more than one headline number honestly supports. Show
+    // the range it ACTUALLY occupied — an observed fact from the same /tdee-history
+    // values the TDEE chart plots — rather than widening the estimator's interval by
+    // some invented factor. The estimator's own CI stays in the derivation panel,
+    // where the optimistic-interval caveat already explains it.
+    ciEl.textContent =
+      `${fmtInt(view.rangeLo)}–${fmtInt(view.rangeHi)} kcal · range over the last ` +
+      `${view.rangeDays} days`;
+    lowConf.className = "chip chip-settling";
+    lowConf.textContent = "Settling";
+    lowConf.hidden = false;
+    noteEl.textContent =
+      `Your estimate has been re-adjusting over the past ${view.rangeDays} days as older ` +
+      "days leave the calculation window. Treat it as a broad range rather than a " +
+      "single number — your weight trend is the steadier signal right now.";
+    noteEl.hidden = false;
+  } else {
+    ciEl.textContent = `${fmtInt(view.ciLow)}–${fmtInt(view.ciHigh)} kcal · 95% CI`;
+    lowConf.hidden = !view.lowConfidence;
+  }
+
+  // Low confidence: the wide CI is the story. Unsettled: the observed range is.
+  // Both route to the same prominent line rather than a parallel treatment.
   ciEl.classList.toggle("is-prominent", view.ciProminent);
 
-  renderDerivation(tdee);
+  renderDerivation(tdee, stability);
 }
 
 /**
@@ -117,7 +151,7 @@ function renderHero() {
  * caveats (including the unflattering ones). Everything is the estimator's own
  * output — the panel can't disagree with the headline.
  */
-function renderDerivation(tdee) {
+function renderDerivation(tdee, stability = null) {
   const panel = $("derivation");
   const info = formatDerivation(tdee);
   if (info == null) {
@@ -142,7 +176,12 @@ function renderDerivation(tdee) {
     $("derivation-ci").hidden = true;
   }
 
-  const caveats = caveatsForState(tdee.status, tdee.low_confidence_reason, info.alpha);
+  const caveats = caveatsForState(
+    tdee.status,
+    tdee.low_confidence_reason,
+    info.alpha,
+    stability,
+  );
   $("derivation-caveats").innerHTML = caveats
     .map((c) => `<li class="caveat-${c.kind.replace(/_/g, "-")}">${escapeHtml(c.text)}</li>`)
     .join("");
@@ -721,14 +760,18 @@ function renderAll() {
 }
 
 async function refresh() {
-  const [estimate, settings, requirements] = await Promise.all([
+  // `/tdee-history` recomputes the estimator once per logged day, so it is the
+  // heaviest of the four; fetched in parallel so it costs latency, not serial time.
+  const [estimate, settings, requirements, tdeeHistory] = await Promise.all([
     getEstimate(),
     getSettings(),
     getRequirements(),
+    getTdeeHistory(),
   ]);
   state.estimate = estimate;
   state.settings = settings;
   state.requirements = requirements;
+  state.tdeeHistory = tdeeHistory;
   renderAll();
 }
 

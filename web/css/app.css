@@ -172,6 +172,26 @@ body {
   font-weight: 500;
 }
 
+/* Shown when the rolling estimate has been moving more than a single headline
+   number supports. Same soft blue tint as the weigh-in card's fluctuation note —
+   deliberately NOT --status-warning: the message is "this number is still settling,
+   look at your trend", and an alert colour would contradict it. The estimator's own
+   `low_confidence` chip keeps its existing amber; this is a different, calmer thing. */
+.hero-note {
+  margin: 10px 0 0;
+  padding: 12px;
+  border-radius: var(--radius-xl);
+  background: var(--data-fill);
+  color: var(--on-surface-variant);
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.chip-settling {
+  background: var(--data-fill);
+  color: #14386e;
+}
+
 .hero-footer {
   margin-top: 32px;
   padding-top: 24px;

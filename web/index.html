@@ -105,6 +105,9 @@
           <span class="chip chip-warning" id="low-conf-chip" hidden>Low confidence</span>
         </div>
         <p class="hero-ci" id="tdee-ci"></p>
+        <!-- Shown only when the rolling estimate has been moving more than a single
+             headline number honestly supports (see status.js `estimateStability`). -->
+        <p class="hero-note" id="tdee-stability-note" hidden></p>
 
         <!-- Phase 5: every number is auditable. This shows the estimator's REAL chain
              with the REAL values that produced the number above. Hidden below

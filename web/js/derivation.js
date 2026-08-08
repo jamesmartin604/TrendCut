@@ -86,6 +86,17 @@ const CAVEAT = {
   smoothingLag: (alpha) =>
     `Your weigh-ins are smoothed (EWMA, α=${alpha}) before the trend is fit. Smoothing ` +
     "removes day-to-day water noise but lags genuine changes by a few days.",
+  // The observed-movement context. This is the ONLY place the range-vs-CI comparison
+  // appears: it is shown as explanation, never used to decide anything (see
+  // `estimateStability` — the ratio does not discriminate, so it must not gate).
+  // NB: `halfWidth` is the MEAN half-width across the lookback, not today's — which
+  // is the figure shown in the line above this one. The wording has to say so, or
+  // the panel appears to contradict the number directly above it.
+  estimateSettling: (range, days, halfWidth, ratio) =>
+    `Your estimate has ranged ${Math.round(range).toLocaleString("en-US")} kcal over the ` +
+    `last ${days} days, while its interval averaged ±${Math.round(halfWidth).toLocaleString("en-US")} kcal ` +
+    `across those same days — about ${ratio.toFixed(1)}× more movement than the intervals ` +
+    "claimed. That gap is the optimistic-interval caveat above, measured on your own data.",
   whyLowWide:
     "Confidence is low because your weight-trend slope is uncertain over this window — " +
     "the weigh-ins are noisy or sparse, so the interval is wide.",
@@ -101,9 +112,22 @@ const CAVEAT = {
  * (`insufficient_data`) there's no data-derived estimate, so this returns [] and the
  * frontend shows the provisional's basis instead.
  */
-export function caveatsForState(status, lowConfidenceReason, alpha) {
+export function caveatsForState(status, lowConfidenceReason, alpha, stability = null) {
   if (status !== "ok" && status !== "low_confidence") return [];
   const out = [];
+  // Observed-movement context, when the estimate is unsettled and we have a CI to
+  // compare against. Placed first: it is about this user's own recent numbers.
+  if (stability != null && stability.stable === false && stability.ratioToCi != null) {
+    out.push({
+      kind: "estimate_settling",
+      text: CAVEAT.estimateSettling(
+        stability.range,
+        stability.n,
+        stability.range / stability.ratioToCi,
+        stability.ratioToCi,
+      ),
+    });
+  }
   if (status === "low_confidence") {
     const wide = lowConfidenceReason === "wide_interval" || lowConfidenceReason === "wide_interval_and_implausible";
     const implausible =

@@ -213,17 +213,138 @@ export function fluctuationNote(
   return { tier, ...noteParts(tier, gap, gapKg > 0) };
 }
 
-export function tdeeHeroView(tdee) {
+/**
+ * How many recent daily estimates the stability check looks at. Matches the
+ * lookback the diagnostic used; shorter windows under-detect (median observed range
+ * 50 kcal at 5 days vs 104 at 10), longer ones over-detect (142 at 14).
+ */
+export const STABILITY_LOOKBACK_DAYS = 10;
+
+/**
+ * Fewest estimable days needed before we will call an estimate unstable.
+ *
+ * Fails safe by construction: with fewer points the observed range is mechanically
+ * smaller (median 50 kcal at 5 points vs 104 at 10), so thin history under-gates
+ * rather than over-gates — and below this count we do not judge at all. Same
+ * principle as the fluctuation note's floor gate: if we cannot characterise it, we
+ * do not assert it.
+ */
+export const MIN_STABILITY_POINTS = 6;
+
+/**
+ * How far the daily estimate may range over the lookback before a single headline
+ * number is misleading, in kcal.
+ *
+ * ABSOLUTE, not a percentage of the estimate. Measured on the frozen simulator: the
+ * observed 10-day range is 75 / 104 / 137 kcal at water noise sd 0.3 / 0.5 / 0.7 and
+ * is *identical* at true TDEEs of 1800, 2400 and 3200 — it tracks weight noise, not
+ * the estimate's magnitude. A relative threshold would therefore gate purely by body
+ * size: at 4%, an 1800-kcal user trips on 72 kcal of movement while a 3200-kcal user
+ * needs 128 kcal for the same physical instability.
+ *
+ * At 100 kcal the gate fires on 14% of constant-truth runs at sd 0.1, 52% at sd 0.5
+ * and 73% at sd 0.9 — quiet loggers usually keep the confident display, noisy ones
+ * usually do not, which is the honest ordering.
+ */
+export const INSTABILITY_RANGE_KCAL = 100;
+
+/**
+ * Is the rolling TDEE estimate settled enough to show as one confident number?
+ *
+ * Derived ONLY from values `/tdee-history` already returns — no estimator change and
+ * no new API field. The question asked is deliberately *not* "is the reported CI
+ * correct?": `tests/test_ci_coverage.py` proves the CI is too narrow essentially
+ * always (empirical coverage ~23% against a nominal 95%, with `ok_rate == 1.0`), so a
+ * gate keyed to that would be permanently on and would bite the cleanest loggers
+ * hardest — their intervals are tightest. Instead this asks the observable question:
+ * **has the estimate itself moved so much lately that one number misleads?**
+ *
+ * `ratioToCi` (observed range ÷ mean reported half-width) is returned for the
+ * derivation panel to display as context. It MUST NOT be used to gate — it is the
+ * quantity that does not discriminate, and `status.test.js` asserts that a series
+ * with a large ratio but a sub-threshold range stays stable.
+ *
+ * @param {Array<{tdee: number|null, ci_low: number|null, ci_high: number|null}>} points
+ *   `/tdee-history` points, oldest first.
+ * @returns {{stable: boolean, reason: string, lo: number|null, hi: number|null,
+ *   range: number|null, n: number, ratioToCi: number|null}}
+ */
+export function estimateStability(
+  points,
+  {
+    lookback = STABILITY_LOOKBACK_DAYS,
+    minPoints = MIN_STABILITY_POINTS,
+    rangeKcal = INSTABILITY_RANGE_KCAL,
+  } = {},
+) {
+  const recent = (points ?? [])
+    .slice(-lookback)
+    .filter((p) => p != null && typeof p.tdee === "number" && Number.isFinite(p.tdee));
+
+  const unjudged = (reason, n) => ({
+    stable: true,
+    reason,
+    lo: null,
+    hi: null,
+    range: null,
+    n,
+    ratioToCi: null,
+  });
+  if (recent.length < minPoints) return unjudged("insufficient_history", recent.length);
+
+  const values = recent.map((p) => p.tdee);
+  const lo = Math.min(...values);
+  const hi = Math.max(...values);
+  const range = hi - lo;
+
+  // Context only — never consulted below.
+  const halfWidths = recent
+    .filter((p) => typeof p.ci_high === "number" && Number.isFinite(p.ci_high))
+    .map((p) => p.ci_high - p.tdee)
+    .filter((h) => h > 0);
+  const meanHalfWidth = halfWidths.length
+    ? halfWidths.reduce((a, b) => a + b, 0) / halfWidths.length
+    : null;
+
+  return {
+    stable: range <= rangeKcal,
+    reason: range <= rangeKcal ? "settled" : "moving",
+    lo,
+    hi,
+    range,
+    n: recent.length,
+    ratioToCi: meanHalfWidth ? range / meanHalfWidth : null,
+  };
+}
+
+/**
+ * How the TDEE hero should present a result.
+ *
+ * `stability` is optional; when omitted the view is exactly what it was before the
+ * stability gate existed. The gate applies ONLY when the estimator itself said
+ * `ok` — if it already returned `low_confidence`, that presentation already
+ * communicates uncertainty and is left untouched rather than doubled up.
+ *
+ * Both paths route to the same `ciProminent` treatment, so there is one softened
+ * presentation rather than a parallel one.
+ */
+export function tdeeHeroView(tdee, stability = null) {
   const insufficient = tdee.status === "insufficient_data";
   const lowConfidence = tdee.status === "low_confidence";
+  const unstable = tdee.status === "ok" && stability != null && stability.stable === false;
   return {
     insufficient,
     lowConfidence,
+    unstable,
     showNumber: !insufficient, // a real TDEE number is displayed
     showUnit: !insufficient,
-    ciProminent: lowConfidence, // wide CI is the headline on low confidence
+    // Wide CI on low confidence, observed range when unsettled — same prominent line.
+    ciProminent: lowConfidence || unstable,
     tdee: insufficient ? null : tdee.tdee,
     ciLow: insufficient ? null : tdee.ci_low,
     ciHigh: insufficient ? null : tdee.ci_high,
+    rangeLo: unstable ? stability.lo : null,
+    rangeHi: unstable ? stability.hi : null,
+    rangeDays: unstable ? stability.n : null,
   };
 }
