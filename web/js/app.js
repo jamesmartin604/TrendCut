@@ -17,6 +17,7 @@ import {
 } from "./api.js";
 import { goalLineAnchors, nearestIndex } from "./chart-math.js";
 import { renderWeightChart } from "./chart.js";
+import { addDays, fmtDateHuman, needsYear } from "./dates.js";
 import { openEntryForm } from "./entry-form.js";
 import { caveatsForState, formatDerivation } from "./derivation.js";
 import {
@@ -66,16 +67,6 @@ const units = () => (state.settings?.units === "lb" ? "lb" : "kg");
 // ---------- formatting helpers ---------- //
 
 const fmtInt = (v) => Math.round(v).toLocaleString("en-US");
-
-function fmtDateHuman(date) {
-  return date.toLocaleString("en", { month: "short", day: "numeric", timeZone: "UTC" });
-}
-
-function addDays(iso, days) {
-  const d = new Date(`${iso}T00:00:00Z`);
-  d.setUTCDate(d.getUTCDate() + days);
-  return d;
-}
 
 function todayIso() {
   const now = new Date();
@@ -281,9 +272,19 @@ function renderPace() {
   }
   const daysToTarget = Math.ceil(remaining / -tdee.slope_kg_per_day);
   const arrival = addDays(last.date, daysToTarget);
-  const arrivalText = fmtDateHuman(arrival);
-  if (settings.target_date) {
-    const wanted = new Date(`${settings.target_date}T00:00:00Z`);
+  const wanted = settings.target_date
+    ? new Date(`${settings.target_date}T00:00:00Z`)
+    : null;
+
+  // Both halves of this sentence share ONE year decision. The projected arrival is
+  // unbounded (a shallow trend projects years out) and the target is user-set, so
+  // either can leave the current year; formatting them independently produced
+  // "Projected … by Jul 9 — after your Aug 9 target", which reads as a contradiction
+  // even though the comparison below is correct and uses full dates.
+  const withYear = needsYear([arrival, wanted]);
+  const arrivalText = fmtDateHuman(arrival, { withYear });
+
+  if (wanted) {
     if (arrival <= wanted) {
       chip.classList.add("is-ontrack");
       chipText.textContent = `On pace for ${tgt} by ${arrivalText}.`;
@@ -291,7 +292,7 @@ function renderPace() {
       chip.classList.add("is-behind");
       chipText.textContent =
         `Projected ${tgt} by ${arrivalText} — after your ` +
-        `${fmtDateHuman(wanted)} target.`;
+        `${fmtDateHuman(wanted, { withYear })} target.`;
     }
   } else {
     chipText.textContent = `Projected to reach ${tgt} by ${arrivalText}.`;
